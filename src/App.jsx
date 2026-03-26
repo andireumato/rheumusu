@@ -523,13 +523,16 @@ const STEPS = ["👤 Identitas","📍 Rujukan","📏 Antropometri","🕐 Riwayat
 
 function PatientForm({ onClose, onSave }) {
   const [step, setStep] = useState(0);
-  const [formData, setFormData] = useState({...emptyPatient});
-  const [comorbidities, setComorbidities] = useState([]);
+  // Simpan semua data di ref - tidak trigger re-render saat ketik
+  const data = useRef({...emptyPatient});
+  // Hanya comorbidities yang perlu controlled (untuk tampilan toggle)
+  const [comorbids, setComorbids] = useState([]);
+  // Trigger re-render manual hanya saat perlu (step change / kalkulasi)
+  const [tick, setTick] = useState(0);
+  const refresh = () => setTick(t => t+1);
 
-  const set = (k, v) => setFormData(prev => ({...prev, [k]: v}));
-  const toggleComorbid = v => setComorbidities(prev =>
-    prev.includes(v) ? prev.filter(x=>x!==v) : [...prev, v]
-  );
+  const get = k => data.current[k] || "";
+  const set = (k, v) => { data.current[k] = v; };
 
   const IS = { width:"100%", background:"#0f172a", border:"1px solid #334155", borderRadius:8, padding:"9px 12px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box", marginBottom:10 };
   const LB = { color:"#94a3b8", fontSize:11, fontWeight:700, display:"block", marginBottom:3, textTransform:"uppercase", letterSpacing:"0.05em" };
@@ -537,48 +540,54 @@ function PatientForm({ onClose, onSave }) {
   const G3 = { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 };
   const SH = { color:"#3b82f6", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"16px 0 8px", paddingBottom:5, borderBottom:"1px solid #1e3a5f" };
 
-  const FI = ({k,l,type="text",ph=""}) => (
+  // Uncontrolled input - tidak re-render parent saat ketik
+  const FI = ({k, l, type="text", ph=""}) => (
     <div><label style={LB}>{l}</label>
-    <input type={type} value={formData[k]||""} onChange={e=>set(k,e.target.value)} placeholder={ph} style={IS}/></div>
+    <input type={type} defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder={ph} style={IS}/></div>
   );
-  const SE = ({k,l,opts}) => (
+  const SE = ({k, l, opts, def=""}) => (
     <div><label style={LB}>{l}</label>
-    <select value={formData[k]||""} onChange={e=>set(k,e.target.value)} style={IS}>
+    <select defaultValue={get(k)||def} onChange={e=>set(k,e.target.value)} style={IS}>
       <option value="">Pilih...</option>
       {opts.map(o=><option key={o}>{o}</option>)}
     </select></div>
   );
+  const TA = ({k, l, rows=2, ph=""}) => (
+    <div><label style={LB}>{l}</label>
+    <textarea defaultValue={get(k)} onChange={e=>set(k,e.target.value)} rows={rows} placeholder={ph} style={{...IS,resize:"vertical"}}/></div>
+  );
 
   const calcBmi = () => {
-    const w=parseFloat(formData.weight), h=parseFloat(formData.height)/100;
-    if(w>0&&h>0) set("bmi",(w/(h*h)).toFixed(1));
+    const w=parseFloat(data.current.weight), h=parseFloat(data.current.height)/100;
+    if(w>0&&h>0){ set("bmi",(w/(h*h)).toFixed(1)); refresh(); }
   };
   const calcWhr = () => {
-    const w=parseFloat(formData.waist), h=parseFloat(formData.hip);
-    if(w>0&&h>0) set("whr",(w/h).toFixed(2));
+    const w=parseFloat(data.current.waist), h=parseFloat(data.current.hip);
+    if(w>0&&h>0){ set("whr",(w/h).toFixed(2)); refresh(); }
   };
-  const calcDelay = (onset, dx) => {
-    if(onset&&dx){
-      const months=Math.round((new Date(dx)-new Date(onset))/(30.44*24*3600*1000));
-      if(months>=0) set("diagnosisDelay",`${months} bulan`);
-    }
+  const calcDelay = () => {
+    const o=data.current.onsetDate, d=data.current.firstDiagnosisDate;
+    if(o&&d){ const m=Math.round((new Date(d)-new Date(o))/(30.44*24*3600*1000)); if(m>=0){ set("diagnosisDelay",`${m} bulan`); refresh(); } }
   };
 
   const STEPS = ["👤 Identitas","📍 Rujukan","📏 Antropometri","🕐 Riwayat","💊 Terapi","🔬 Lab","📊 Skor","📝 Catatan"];
 
+  // Setiap step diberi key unik agar input di-reset saat ganti step
+  const stepKey = `step-${step}-${tick}`;
+
   const renderStep = () => {
     if(step===0) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Identitas Pasien</div>
         <div style={G2}><FI k="mrn" l="No. Rekam Medis *" ph="XXXXX"/><FI k="initials" l="Inisial Pasien *" ph="Ny. SR / Tn. AB"/></div>
         <div style={G2}>
           <div><label style={LB}>Tanggal Lahir</label>
-            <input type="date" value={formData.dob||""} onChange={e=>{set("dob",e.target.value); if(e.target.value){set("age",Math.floor((new Date()-new Date(e.target.value))/(365.25*24*3600*1000)));}}} style={IS}/></div>
+            <input type="date" defaultValue={get("dob")} onChange={e=>{set("dob",e.target.value);if(e.target.value)set("age",Math.floor((new Date()-new Date(e.target.value))/(365.25*24*3600*1000)));}} style={IS}/></div>
           <FI k="age" l="Usia (tahun) *" type="number" ph="45"/>
         </div>
         <div style={G2}>
           <div><label style={LB}>Jenis Kelamin *</label>
-            <select value={formData.gender||"P"} onChange={e=>set("gender",e.target.value)} style={IS}>
+            <select defaultValue={get("gender")||"P"} onChange={e=>set("gender",e.target.value)} style={IS}>
               <option value="P">Perempuan</option><option value="L">Laki-laki</option>
             </select></div>
           <SE k="religion" l="Agama" opts={["Islam","Kristen Protestan","Katolik","Hindu","Buddha","Konghucu"]}/>
@@ -591,85 +600,82 @@ function PatientForm({ onClose, onSave }) {
       </div>
     );
     if(step===1) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Sumber Rujukan</div>
         <SE k="referralSource" l="Dirujuk dari *" opts={REFERRAL_SOURCES}/>
         <div style={G2}>
-          <div><label style={LB}>Tanggal Rujukan</label><input type="date" value={formData.referralDate||""} onChange={e=>set("referralDate",e.target.value)} style={IS}/></div>
-          <div><label style={LB}>Tanggal Kunjungan *</label><input type="date" value={formData.visitDate||""} onChange={e=>set("visitDate",e.target.value)} style={IS}/></div>
+          <div><label style={LB}>Tanggal Rujukan</label><input type="date" defaultValue={get("referralDate")} onChange={e=>set("referralDate",e.target.value)} style={IS}/></div>
+          <div><label style={LB}>Tanggal Kunjungan *</label><input type="date" defaultValue={get("visitDate")} onChange={e=>set("visitDate",e.target.value)} style={IS}/></div>
         </div>
         <div><label style={LB}>Jenis Kunjungan</label>
-          <select value={formData.visitType||"Rawat Jalan (Baru)"} onChange={e=>set("visitType",e.target.value)} style={IS}>
+          <select defaultValue={get("visitType")||"Rawat Jalan (Baru)"} onChange={e=>set("visitType",e.target.value)} style={IS}>
             {["Rawat Jalan (Baru)","Rawat Jalan (Kontrol)","Rawat Inap"].map(v=><option key={v}>{v}</option>)}
           </select></div>
       </div>
     );
     if(step===2) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Antropometri</div>
         <div style={G2}><FI k="weight" l="Berat Badan (kg)" type="number" ph="70"/><FI k="height" l="Tinggi Badan (cm)" type="number" ph="165"/></div>
         <div style={G2}>
           <div>
             <label style={LB}>IMT / BMI (kg/m²)</label>
             <div style={{display:"flex",gap:6}}>
-              <input type="number" value={formData.bmi||""} onChange={e=>set("bmi",e.target.value)} placeholder="Auto" style={{...IS,marginBottom:0,flex:1}}/>
-              <button onClick={calcBmi} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10}}>Hitung</button>
+              <input type="number" defaultValue={get("bmi")} onChange={e=>set("bmi",e.target.value)} placeholder="Auto" style={{...IS,marginBottom:0,flex:1}}/>
+              <button type="button" onClick={calcBmi} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10,whiteSpace:"nowrap"}}>Hitung</button>
             </div>
-            {formData.bmi&&<div style={{fontSize:11,marginBottom:8,color:parseFloat(formData.bmi)>=27.5?"#ef4444":parseFloat(formData.bmi)>=23?"#f59e0b":"#10b981"}}>
-              {parseFloat(formData.bmi)>=27.5?"⚠ Obesitas":parseFloat(formData.bmi)>=23?"⚠ Overweight":"✓ Normal"}
+            {get("bmi")&&<div style={{fontSize:11,marginBottom:8,color:parseFloat(get("bmi"))>=27.5?"#ef4444":parseFloat(get("bmi"))>=23?"#f59e0b":"#10b981"}}>
+              {parseFloat(get("bmi"))>=27.5?"⚠ Obesitas":parseFloat(get("bmi"))>=23?"⚠ Overweight":"✓ Normal"}
             </div>}
           </div>
-          <div style={{background:"#0f172a",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#64748b",lineHeight:1.7}}>
+          <div style={{background:"#0f172a",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#64748b",lineHeight:1.8,marginBottom:10}}>
             &lt;18.5 Underweight<br/>18.5–22.9 Normal<br/>23–24.9 Overweight<br/>≥25 Obesitas
           </div>
         </div>
         <div style={G2}>
           <div>
             <label style={LB}>Lingkar Pinggang (cm)</label>
-            <input type="number" value={formData.waist||""} onChange={e=>set("waist",e.target.value)} placeholder="80" style={IS}/>
-            {formData.waist&&<div style={{fontSize:11,marginBottom:8,color:(formData.gender==="P"&&parseFloat(formData.waist)>=80)||(formData.gender==="L"&&parseFloat(formData.waist)>=90)?"#ef4444":"#10b981"}}>
-              {formData.gender==="P"?(parseFloat(formData.waist)>=80?"⚠ Risiko tinggi":"✓ Normal"):(parseFloat(formData.waist)>=90?"⚠ Risiko tinggi":"✓ Normal")}
-            </div>}
+            <input type="number" defaultValue={get("waist")} onChange={e=>set("waist",e.target.value)} placeholder="80" style={IS}/>
           </div>
           <div><label style={LB}>Lingkar Panggul (cm)</label>
-            <input type="number" value={formData.hip||""} onChange={e=>set("hip",e.target.value)} placeholder="95" style={IS}/></div>
+            <input type="number" defaultValue={get("hip")} onChange={e=>set("hip",e.target.value)} placeholder="95" style={IS}/></div>
         </div>
         <div style={G2}>
-          <div><label style={LB}>Rasio Pinggang/Panggul</label>
+          <div><label style={LB}>Rasio Pinggang/Panggul (WHR)</label>
             <div style={{display:"flex",gap:6}}>
-              <input type="number" value={formData.whr||""} onChange={e=>set("whr",e.target.value)} placeholder="Auto" style={{...IS,marginBottom:0,flex:1}}/>
-              <button onClick={calcWhr} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10}}>Hitung</button>
+              <input type="number" defaultValue={get("whr")} onChange={e=>set("whr",e.target.value)} placeholder="Auto" style={{...IS,marginBottom:0,flex:1}}/>
+              <button type="button" onClick={calcWhr} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10,whiteSpace:"nowrap"}}>Hitung</button>
             </div></div>
           <div></div>
         </div>
         <div style={SH}>Tanda Vital</div>
-        <div style={G3}><FI k="systolicBp" l="TD Sistolik (mmHg)" type="number" ph="120"/><FI k="diastolicBp" l="TD Diastolik (mmHg)" type="number" ph="80"/><FI k="heartRate" l="Nadi (x/menit)" type="number" ph="80"/></div>
+        <div style={G3}><FI k="systolicBp" l="TD Sistolik" type="number" ph="120"/><FI k="diastolicBp" l="TD Diastolik" type="number" ph="80"/><FI k="heartRate" l="Nadi (x/mnt)" type="number" ph="80"/></div>
       </div>
     );
     if(step===3) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Keluhan & Onset</div>
-        <div><label style={LB}>Keluhan Utama</label><textarea value={formData.chiefComplaint||""} onChange={e=>set("chiefComplaint",e.target.value)} rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <TA k="chiefComplaint" l="Keluhan Utama" ph="Nyeri sendi..."/>
         <div style={G2}>
-          <div><label style={LB}>Tanggal Onset Gejala *</label>
-            <input type="date" value={formData.onsetDate||""} onChange={e=>{set("onsetDate",e.target.value);calcDelay(e.target.value,formData.firstDiagnosisDate);}} style={IS}/></div>
+          <div><label style={LB}>Tanggal Onset *</label>
+            <input type="date" defaultValue={get("onsetDate")} onChange={e=>{set("onsetDate",e.target.value);setTimeout(calcDelay,50);}} style={IS}/></div>
           <div><label style={LB}>Durasi Sebelum Diagnosis</label>
             <div style={{display:"flex",gap:6}}>
-              <input type="number" value={formData.onsetDuration||""} onChange={e=>set("onsetDuration",e.target.value)} placeholder="6" style={{...IS,marginBottom:0,flex:1}}/>
-              <select value={formData.onsetDurationUnit||"bulan"} onChange={e=>set("onsetDurationUnit",e.target.value)} style={{...IS,marginBottom:0,width:"auto"}}>
+              <input type="number" defaultValue={get("onsetDuration")} onChange={e=>set("onsetDuration",e.target.value)} placeholder="6" style={{...IS,marginBottom:0,flex:1}}/>
+              <select defaultValue={get("onsetDurationUnit")||"bulan"} onChange={e=>set("onsetDurationUnit",e.target.value)} style={{...IS,marginBottom:0,width:"auto"}}>
                 <option>hari</option><option>minggu</option><option>bulan</option><option>tahun</option>
               </select>
             </div></div>
         </div>
         <div style={SH}>Diagnosis</div>
         <div style={G2}>
-          <div><label style={LB}>Tanggal Diagnosis Pertama *</label>
-            <input type="date" value={formData.firstDiagnosisDate||""} onChange={e=>{set("firstDiagnosisDate",e.target.value);calcDelay(formData.onsetDate,e.target.value);}} style={IS}/></div>
-          <FI k="firstDiagnosisPlace" l="Tempat Diagnosis" ph="RS / Klinik"/>
+          <div><label style={LB}>Tgl Diagnosis Pertama *</label>
+            <input type="date" defaultValue={get("firstDiagnosisDate")} onChange={e=>{set("firstDiagnosisDate",e.target.value);setTimeout(calcDelay,50);}} style={IS}/></div>
+          <FI k="firstDiagnosisPlace" l="Tempat Diagnosis" ph="RSUP Adam Malik"/>
         </div>
         <FI k="diagnosisDelay" l="Diagnostic Delay (otomatis)" ph="Selisih onset - diagnosis"/>
         <div><label style={LB}>Diagnosis Utama *</label>
-          <select value={formData.diagnosis||""} onChange={e=>set("diagnosis",e.target.value)} style={IS}>
+          <select defaultValue={get("diagnosis")} onChange={e=>set("diagnosis",e.target.value)} style={IS}>
             <option value="">Pilih...</option>{DIAGNOSES.map(d=><option key={d}>{d}</option>)}
           </select></div>
         <FI k="diagnosisSecondary" l="Diagnosis Sekunder" ph="Lupus Nefritis..."/>
@@ -682,20 +688,20 @@ function PatientForm({ onClose, onSave }) {
       </div>
     );
     if(step===4) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Riwayat Terapi</div>
-        <div><label style={LB}>Terapi Sebelumnya</label><textarea value={formData.previousTherapy||""} onChange={e=>set("previousTherapy",e.target.value)} rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>Terapi Saat Ini *</label><textarea value={formData.currentTherapy||""} onChange={e=>set("currentTherapy",e.target.value)} rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <TA k="previousTherapy" l="Terapi Sebelumnya" ph="MTX, HCQ..."/>
+        <TA k="currentTherapy" l="Terapi Saat Ini *" ph="MTX 15mg/minggu..."/>
         <div style={G2}>
-          <SE k="steroidUse" l="Penggunaan Steroid" opts={["Tidak","Ya – dosis rendah (<7.5mg/hari)","Ya – dosis sedang (7.5–30mg)","Ya – dosis tinggi (>30mg)","Pulse IV"]}/>
-          <SE k="nsaidUse" l="Penggunaan NSAID" opts={["Tidak","Sesekali (PRN)","Reguler"]}/>
+          <SE k="steroidUse" l="Steroid" opts={["Tidak","Ya – dosis rendah (<7.5mg/hari)","Ya – dosis sedang (7.5–30mg)","Ya – dosis tinggi (>30mg)","Pulse IV"]}/>
+          <SE k="nsaidUse" l="NSAID" opts={["Tidak","Sesekali (PRN)","Reguler"]}/>
         </div>
         <div style={SH}>Komorbiditas</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}}>
           {COMORBIDITIES_LIST.map(c=>(
-            <button key={c} onClick={()=>toggleComorbid(c)}
-              style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${comorbidities.includes(c)?"#3b82f6":"#334155"}`,background:comorbidities.includes(c)?"#3b82f622":"transparent",color:comorbidities.includes(c)?"#3b82f6":"#94a3b8",fontSize:12,cursor:"pointer",fontWeight:comorbidities.includes(c)?700:400}}>
-              {comorbidities.includes(c)?"✓ ":""}{c}
+            <button key={c} type="button" onClick={()=>setComorbids(prev=>prev.includes(c)?prev.filter(x=>x!==c):[...prev,c])}
+              style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${comorbids.includes(c)?"#3b82f6":"#334155"}`,background:comorbids.includes(c)?"#3b82f622":"transparent",color:comorbids.includes(c)?"#3b82f6":"#94a3b8",fontSize:12,cursor:"pointer",fontWeight:comorbids.includes(c)?700:400}}>
+              {comorbids.includes(c)?"✓ ":""}{c}
             </button>
           ))}
         </div>
@@ -709,42 +715,43 @@ function PatientForm({ onClose, onSave }) {
       </div>
     );
     if(step===5) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Hematologi & Kimia Darah</div>
-        <div style={G3}>{[["hb","Hb (g/dL)"],["wbc","Leukosit (10³/µL)"],["plt","Trombosit (10³/µL)"],["esr","LED/ESR (mm/jam)"],["crp","CRP (mg/L)"],["albumin","Albumin (g/dL)"],["sgot","SGOT"],["sgpt","SGPT"],["ureum","Ureum (mg/dL)"],["creatinine","Kreatinin (mg/dL)"],["gfr","eGFR (ml/min)"],["urineProtein","Protein Urin"]].map(([k,l])=>(
-          <div key={k}><label style={LB}>{l}</label><input value={formData[k]||""} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
+        <div style={G3}>{[["hb","Hb (g/dL)"],["wbc","Leukosit (10³/µL)"],["plt","Trombosit (10³/µL)"],["esr","LED/ESR (mm/jam)"],["crp","CRP (mg/L)"],["albumin","Albumin (g/dL)"],["sgot","SGOT (U/L)"],["sgpt","SGPT (U/L)"],["ureum","Ureum (mg/dL)"],["creatinine","Kreatinin (mg/dL)"],["gfr","eGFR (ml/min)"],["urineProtein","Protein Urin"]].map(([k,l])=>(
+          <div key={k}><label style={LB}>{l}</label><input defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
         ))}</div>
         <div style={SH}>Serologi</div>
         <div style={G3}>{[["rf","RF"],["antiCcp","Anti-CCP"],["ana","ANA"],["antidsDna","Anti-dsDNA"],["antiSm","Anti-Sm"],["antiphospholipid","Antifosfolipid"],["c3","C3 (mg/dL)"],["c4","C4 (mg/dL)"],["uricAcid","Asam Urat (mg/dL)"]].map(([k,l])=>(
-          <div key={k}><label style={LB}>{l}</label><input value={formData[k]||""} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
+          <div key={k}><label style={LB}>{l}</label><input defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
         ))}</div>
         <div style={SH}>Metabolik</div>
         <div style={G3}>{[["glucose","Gula Darah"],["hba1c","HbA1c (%)"],["cholesterol","Kolesterol"],["ldl","LDL"],["hdl","HDL"],["tg","Trigliserida"]].map(([k,l])=>(
-          <div key={k}><label style={LB}>{l}</label><input type="number" value={formData[k]||""} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
+          <div key={k}><label style={LB}>{l}</label><input type="number" defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
         ))}</div>
       </div>
     );
     if(step===6) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Skor Aktivitas Penyakit</div>
         <div style={G3}>{[["das28","DAS28"],["sdai","SDAI"],["sledai","SLEDAI-2K"],["basdai","BASDAI"],["vas","VAS Nyeri (0–10)"]].map(([k,l])=>(
-          <div key={k}><label style={LB}>{l}</label><input type="number" value={formData[k]||""} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
+          <div key={k}><label style={LB}>{l}</label><input type="number" defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
         ))}</div>
         <div style={SH}>Pencitraan & Histopatologi</div>
-        <div><label style={LB}>Foto Rontgen</label><textarea value={formData.xray||""} onChange={e=>set("xray",e.target.value)} rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>USG Sendi</label><textarea value={formData.usg||""} onChange={e=>set("usg",e.target.value)} rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>MRI</label><textarea value={formData.mri||""} onChange={e=>set("mri",e.target.value)} rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>Biopsi / Histopatologi</label><textarea value={formData.biopsyResult||""} onChange={e=>set("biopsyResult",e.target.value)} rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <TA k="xray" l="Foto Rontgen" ph="Erosi sendi MCP bilateral..."/>
+        <TA k="usg" l="USG Sendi" ph="Double contour sign..."/>
+        <TA k="mri" l="MRI" ph="Sinovitis..."/>
+        <TA k="biopsyResult" l="Biopsi / Histopatologi" ph="GN proliferatif..."/>
       </div>
     );
     if(step===7) return (
-      <div>
+      <div key={stepKey}>
         <div style={SH}>Catatan & Konfirmasi</div>
-        <div><label style={LB}>Catatan Klinis / Penelitian</label><textarea value={formData.notes||""} onChange={e=>set("notes",e.target.value)} rows={4} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>Tanggal Input Data</label><input type="date" value={formData.inputDate||new Date().toISOString().split("T")[0]} onChange={e=>set("inputDate",e.target.value)} style={IS}/></div>
+        <TA k="notes" l="Catatan Klinis / Penelitian" rows={4} ph="Catatan tambahan..."/>
+        <div><label style={LB}>Tanggal Input Data</label>
+          <input type="date" defaultValue={get("inputDate")||new Date().toISOString().split("T")[0]} onChange={e=>set("inputDate",e.target.value)} style={IS}/></div>
         <div style={{background:"#0f172a",borderRadius:12,padding:16,marginTop:8}}>
           <div style={{color:"#94a3b8",fontWeight:700,fontSize:12,marginBottom:10}}>📋 Ringkasan</div>
-          {[[formData.mrn,"No. RM"],[`${formData.initials||"-"}, ${formData.age||"-"}th ${formData.gender==="P"?"♀":"♂"}`,"Pasien"],[formData.ethnicity,"Suku"],[formData.education,"Pendidikan"],[formData.occupation,"Pekerjaan"],[formData.marital,"Status"],[formData.referralSource,"Rujukan"],[formData.visitDate,"Tgl Kunjungan"],[formData.bmi?`${formData.bmi} kg/m²`:"","IMT"],[formData.diagnosis,"Diagnosis"],[formData.onsetDate,"Onset"],[formData.diagnosisDelay,"Diagnostic Delay"],[formData.diseaseActivity,"Aktivitas"],[formData.das28,"DAS28"],[formData.sledai,"SLEDAI"],[comorbidities.join(", "),"Komorbid"],[formData.currentTherapy,"Terapi"]].filter(([v])=>v).map(([v,k])=>(
+          {[[get("mrn"),"No. RM"],[`${get("initials")||"-"}, ${get("age")||"-"}th ${data.current.gender==="L"?"♂":"♀"}`,"Pasien"],[get("ethnicity"),"Suku"],[get("education"),"Pendidikan"],[get("occupation"),"Pekerjaan"],[get("marital"),"Status"],[get("referralSource"),"Rujukan"],[get("visitDate"),"Tgl Kunjungan"],[get("bmi")?`${get("bmi")} kg/m²`:"","IMT"],[get("diagnosis"),"Diagnosis"],[get("onsetDate"),"Onset"],[get("diagnosisDelay"),"Diagnostic Delay"],[get("diseaseActivity"),"Aktivitas"],[get("das28"),"DAS28"],[get("sledai"),"SLEDAI"],[comorbids.join(", "),"Komorbid"],[get("currentTherapy"),"Terapi"]].filter(([v])=>v).map(([v,k])=>(
             <div key={k} style={{display:"flex",gap:8,marginBottom:3}}><span style={{color:"#64748b",fontSize:12,minWidth:120}}>{k}:</span><span style={{color:"#f1f5f9",fontSize:12}}>{v}</span></div>
           ))}
         </div>
@@ -762,7 +769,7 @@ function PatientForm({ onClose, onSave }) {
           </div>
           <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:2}}>
             {STEPS.map((s,i)=>(
-              <button key={i} onClick={()=>setStep(i)}
+              <button key={i} type="button" onClick={()=>setStep(i)}
                 style={{padding:"4px 9px",borderRadius:7,border:`1.5px solid ${step===i?"#3b82f6":i<step?"#10b981":"#334155"}`,background:step===i?"#3b82f622":i<step?"#10b98122":"transparent",color:step===i?"#3b82f6":i<step?"#10b981":"#64748b",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontWeight:step===i?700:400}}>
                 {i<step?"✓ ":""}{s}
               </button>
@@ -771,12 +778,12 @@ function PatientForm({ onClose, onSave }) {
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"14px 22px"}}>{renderStep()}</div>
         <div style={{padding:"12px 22px",borderTop:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <button onClick={()=>setStep(s=>Math.max(0,s-1))} disabled={step===0}
+          <button type="button" onClick={()=>setStep(s=>Math.max(0,s-1))} disabled={step===0}
             style={{padding:"8px 18px",borderRadius:10,border:"1px solid #334155",background:step===0?"transparent":"#334155",color:step===0?"#475569":"#f1f5f9",cursor:step===0?"default":"pointer",fontWeight:600,fontSize:13}}>← Sebelumnya</button>
           <span style={{color:"#64748b",fontSize:12}}>{step+1} / {STEPS.length}</span>
           {step<STEPS.length-1
-            ?<button onClick={()=>setStep(s=>s+1)} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>Lanjut →</button>
-            :<button onClick={()=>onSave({...formData,comorbidities})} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>💾 Simpan</button>}
+            ?<button type="button" onClick={()=>setStep(s=>s+1)} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>Lanjut →</button>
+            :<button type="button" onClick={()=>onSave({...data.current, comorbidities:comorbids})} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>💾 Simpan</button>}
         </div>
       </div>
     </div>
