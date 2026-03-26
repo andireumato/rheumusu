@@ -829,14 +829,12 @@ export default function RheumUSU() {
             {["resident","supervisor"].map(r=><button key={r} onClick={()=>setLoginForm(p=>({...p,role:r}))} style={{flex:1,padding:10,borderRadius:10,border:`2px solid ${loginForm.role===r?"#3b82f6":"#334155"}`,background:loginForm.role===r?"#3b82f622":"transparent",color:loginForm.role===r?"#3b82f6":"#94a3b8",fontWeight:700,cursor:"pointer",fontSize:13}}>{r==="resident"?"👨‍⚕️ Residen":"👨‍🏫 Supervisor"}</button>)}
           </div>
           <label style={S.label}>Email</label>
-          <input value={loginForm.email} onChange={e=>setLoginForm(p=>({...p,email:e.target.value}))} placeholder={loginForm.role==="supervisor"?"supervisor@fkusu.ac.id":"budi@ppds.fkusu.ac.id"} style={S.input}/>
+          <input value={loginForm.email} onChange={e=>setLoginForm(p=>({...p,email:e.target.value}))} placeholder="Email Anda" style={S.input}/>
           <label style={S.label}>Password</label>
           <input type="password" value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} placeholder="••••••••" style={S.input}/>
           <button onClick={login} style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),width:"100%",padding:13,fontSize:15,marginTop:6}}>Masuk</button>
-          <div style={{marginTop:16,padding:12,background:"#0f172a",borderRadius:10,fontSize:12,color:"#64748b"}}>
-            <div style={{fontWeight:700,color:"#94a3b8",marginBottom:6}}>Demo Accounts:</div>
-            <div>👨‍🏫 supervisor@fkusu.ac.id</div><div>👨‍⚕️ budi@ppds.fkusu.ac.id</div><div>👨‍⚕️ citra@ppds.fkusu.ac.id</div>
-            <div style={{marginTop:4,fontStyle:"italic"}}>Password: apa saja</div>
+          <div style={{marginTop:14,textAlign:"center",fontSize:12,color:"#475569"}}>
+            Hubungi supervisor jika belum memiliki akun
           </div>
         </div>
       </div>
