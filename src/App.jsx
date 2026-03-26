@@ -952,9 +952,9 @@ export default function RheumUSU() {
       }
     }
   };
-  const myLogbook = currentUser?.role==="supervisor"?logbookEntries:logbookEntries.filter(e=>e.residentId===currentUser?.id);
-  const myPatients = currentUser?.role==="supervisor"?patients:patients.filter(p=>p.residentId===currentUser?.id);
-  const myAttendance = currentUser?.role==="supervisor"?attendance:attendance.filter(a=>a.residentId===currentUser?.id);
+  const myLogbook = currentUser?.role==="supervisor"?logbookEntries:logbookEntries.filter(e=>e.residentId===(currentUser?.id||currentUser?.sub));
+  const myPatients = currentUser?.role==="supervisor"?patients:patients.filter(p=>p.residentId===(currentUser?.id||currentUser?.sub));
+  const myAttendance = currentUser?.role==="supervisor"?attendance:attendance.filter(a=>a.residentId===(currentUser?.id||currentUser?.sub));
   const filteredPatients = myPatients.filter(p=>{ const q=patientSearch.toLowerCase(); return !q||[p.mrn,p.initials,p.diagnosis,p.ethnicity,p.address,p.education,p.occupation].some(v=>v?.toString().toLowerCase().includes(q)); });
   const addLogbook = async () => {
     let fileUrl = "";
@@ -962,7 +962,7 @@ export default function RheumUSU() {
     // Upload ke Google Drive jika ada file dan jenis kegiatan mendukung
     if (newLogbook.fileData && ["cbd","journal","assignment"].includes(newLogbook.type)) {
       const result = await uploadToGoogleDrive({
-        residentName: currentUser.name || currentUser.full_name,
+        residentName: currentUser.full_name || currentUser.name || currentUser.email,
         residentNim: currentUser.nim || "unknown",
         activityType: newLogbook.type,
         topic: newLogbook.topic,
@@ -981,7 +981,7 @@ export default function RheumUSU() {
     setLogbookEntries(prev => [...prev, {
       ...newLogbook,
       id: Date.now(),
-      residentId: currentUser.id,
+      residentId: currentUser.id || currentUser.sub,
       status: "pending",
       fileUrl,
       uploadMsg
@@ -994,7 +994,7 @@ export default function RheumUSU() {
   const approveLogbook = (id) => setLogbookEntries(prev=>prev.map(e=>e.id===id?{...e,status:"approved"}:e));
   const checkIn = () => {
     const today = new Date().toISOString().split("T")[0];
-    if (attendance.find(a => a.residentId === currentUser.id && a.date === today)) {
+    if (attendance.find(a => a.residentId === (currentUser.id || currentUser.sub) && a.date === today)) {
       alert("Anda sudah check-in hari ini.");
       return;
     }
@@ -1007,7 +1007,7 @@ export default function RheumUSU() {
           const mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
           const locationStr = `${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m)`;
           setAttendance(prev => [...prev, {
-            id: Date.now(), residentId: currentUser.id, date: today,
+            id: Date.now(), residentId: currentUser.id || currentUser.sub, date: today,
             checkIn: timeStr, checkOut: null, status: "present",
             location: locationStr, mapsUrl
           }]);
@@ -1015,7 +1015,7 @@ export default function RheumUSU() {
         (err) => {
           // GPS gagal/ditolak — tetap check-in tanpa lokasi
           setAttendance(prev => [...prev, {
-            id: Date.now(), residentId: currentUser.id, date: today,
+            id: Date.now(), residentId: currentUser.id || currentUser.sub, date: today,
             checkIn: timeStr, checkOut: null, status: "present",
             location: "Lokasi tidak tersedia", mapsUrl: null
           }]);
@@ -1025,7 +1025,7 @@ export default function RheumUSU() {
       );
     } else {
       setAttendance(prev => [...prev, {
-        id: Date.now(), residentId: currentUser.id, date: today,
+        id: Date.now(), residentId: currentUser.id || currentUser.sub, date: today,
         checkIn: timeStr, checkOut: null, status: "present",
         location: "GPS tidak didukung", mapsUrl: null
       }]);
@@ -1195,7 +1195,7 @@ export default function RheumUSU() {
             <img src={LOGO_IRA} alt="IRA" style={{width:36,height:36,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{textAlign:"right"}}><div style={{color:"#f1f5f9",fontWeight:600,fontSize:14}}>{currentUser.name}</div><div style={{color:"#64748b",fontSize:11}}>{currentUser.role==="supervisor"?"Supervisor / Sp.PD-KR":`NIM: ${currentUser.nim}`}</div></div>
+            <div style={{textAlign:"right"}}><div style={{color:"#f1f5f9",fontWeight:600,fontSize:14}}>{currentUser.full_name || currentUser.name || currentUser.email}</div><div style={{color:"#64748b",fontSize:11}}>{currentUser.role==="supervisor"?"Supervisor / Sp.PD-KR":currentUser.nim?`NIM: ${currentUser.nim}`:currentUser.email}</div></div>
             <button onClick={logout} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444",padding:"8px 14px"}}>Keluar</button>
           </div>
         </div>
@@ -1210,7 +1210,7 @@ export default function RheumUSU() {
 
         {activeTab==="dashboard"&&(
           <div>
-            <h2 style={{color:"#f1f5f9",marginTop:0,marginBottom:20}}>{currentUser.role==="supervisor"?"Dashboard Supervisor":`Selamat datang, ${currentUser.name.split(" ")[1]}`}</h2>
+            <h2 style={{color:"#f1f5f9",marginTop:0,marginBottom:20}}>{currentUser.role==="supervisor"?"Dashboard Supervisor":`Selamat datang, ${(currentUser.full_name || currentUser.name || "Dokter").split(" ")[1] || (currentUser.full_name || currentUser.name || "Dokter").split(" ")[0]}`}</h2>
             {currentUser.role==="supervisor"?(
               <>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:24}}>
@@ -1344,7 +1344,7 @@ export default function RheumUSU() {
                       </div>
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                         {p.diseaseActivity&&<span style={S.badge(p.diseaseActivity.includes("Tinggi")||p.diseaseActivity.includes("Flare")?"#ef4444":p.diseaseActivity.includes("Sedang")?"#f59e0b":p.diseaseActivity.includes("Rendah")?"#10b981":"#06b6d4")}>{p.diseaseActivity}</span>}
-                        {currentUser.role==="supervisor"&&<span style={{...S.badge("#475569"),fontSize:11}}>{res?.name.split(" ")[1]}</span>}
+                        {currentUser.role==="supervisor"&&<span style={{...S.badge("#475569"),fontSize:11}}>{(res?.full_name || res?.name || "").split(" ")[1]}</span>}
                       </div>
                     </div>
                     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
