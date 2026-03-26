@@ -768,6 +768,14 @@ function PatientDetail({ patient, onClose }) {
 export default function RheumUSU() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email:"", password:"", role:"resident" });
+  const [showRegister, setShowRegister] = useState(false);
+  const [regForm, setRegForm] = useState({ fullName:"", nim:"", phone:"", email:"", password:"", confirmPassword:"" });
+  const [regStatus, setRegStatus] = useState(null);
+  const [regError, setRegError] = useState("");
+  const [showRegister, setShowRegister] = useState(false);
+  const [regForm, setRegForm] = useState({ fullName:"", nim:"", batch:"", phone:"", email:"", password:"", confirmPassword:"", angkatan:"" });
+  const [regStatus, setRegStatus] = useState(null); // null | "loading" | "success" | "error"
+  const [regError, setRegError] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [logbookEntries, setLogbookEntries] = useState([
     { id:1,residentId:"res1",date:"2024-03-01",type:"outpatient",patientName:"Pasien A",diagnosis:"Rheumatoid Arthritis (RA)",notes:"Kontrol rutin",status:"approved" },
@@ -808,6 +816,34 @@ export default function RheumUSU() {
     else { const r=USERS.residents.find(r=>r.email===loginForm.email); if(r)setCurrentUser({...r,role:"resident"}); else alert("Email tidak ditemukan."); }
   };
   const logout = () => { setCurrentUser(null); setActiveTab("dashboard"); };
+
+  const register = async () => {
+    const { fullName, nim, phone, email, password, confirmPassword } = regForm;
+    if (!fullName || !nim || !email || !password) {
+      setRegError("Semua field wajib diisi."); return;
+    }
+    if (password.length < 8) {
+      setRegError("Password minimal 8 karakter."); return;
+    }
+    if (password !== confirmPassword) {
+      setRegError("Konfirmasi password tidak cocok."); return;
+    }
+    if (!email.includes("@")) {
+      setRegError("Format email tidak valid."); return;
+    }
+    setRegStatus("loading");
+    setRegError("");
+    // Simulate registration — in real app connect to Supabase signUp
+    setTimeout(() => {
+      const newResident = {
+        id: "res_" + Date.now(),
+        role: "resident",
+        name: fullName,
+        nim, batch, phone, email,
+      };
+      setRegStatus("success");
+    }, 1200);
+  };
   const myLogbook = currentUser?.role==="supervisor"?logbookEntries:logbookEntries.filter(e=>e.residentId===currentUser?.id);
   const myPatients = currentUser?.role==="supervisor"?patients:patients.filter(p=>p.residentId===currentUser?.id);
   const myAttendance = currentUser?.role==="supervisor"?attendance:attendance.filter(a=>a.residentId===currentUser?.id);
@@ -858,32 +894,142 @@ export default function RheumUSU() {
   const activityCounts = (resId) => { const entries=resId?logbookEntries.filter(e=>e.residentId===resId):myLogbook; return ACTIVITY_TYPES.map(a=>({...a,count:entries.filter(e=>e.type===a.id).length})); };
 
   if(!currentUser) return (
-    <div style={{...S.app,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:"100%",maxWidth:420,padding:24}}>
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:18,marginBottom:14}}>
-            <img src={LOGO_USU} alt="USU" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
+    <div style={{...S.app,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:16}}>
+      <div style={{width:"100%",maxWidth:460}}>
+
+        {/* Logo Header */}
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:18,marginBottom:12}}>
+            <img src={LOGO_USU} alt="USU" style={{width:68,height:68,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
             <div>
               <h1 style={{fontSize:30,fontWeight:900,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:0,lineHeight:1}}>RheumUSU</h1>
-              <p style={{color:"#64748b",margin:"6px 0 0",fontSize:12}}>Divisi Reumatologi</p>
+              <p style={{color:"#64748b",margin:"5px 0 0",fontSize:12}}>Divisi Reumatologi</p>
               <p style={{color:"#475569",margin:"2px 0 0",fontSize:11}}>FK-USU / RSUP Adam Malik</p>
             </div>
-            <img src={LOGO_IRA} alt="IRA" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
+            <img src={LOGO_IRA} alt="IRA" style={{width:68,height:68,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
           </div>
         </div>
-        <div style={S.card}>
-          <div style={{display:"flex",gap:8,marginBottom:20}}>
-            {["resident","supervisor"].map(r=><button key={r} onClick={()=>setLoginForm(p=>({...p,role:r}))} style={{flex:1,padding:10,borderRadius:10,border:`2px solid ${loginForm.role===r?"#3b82f6":"#334155"}`,background:loginForm.role===r?"#3b82f622":"transparent",color:loginForm.role===r?"#3b82f6":"#94a3b8",fontWeight:700,cursor:"pointer",fontSize:13}}>{r==="resident"?"👨‍⚕️ Residen":"👨‍🏫 Supervisor"}</button>)}
-          </div>
-          <label style={S.label}>Email</label>
-          <input value={loginForm.email} onChange={e=>setLoginForm(p=>({...p,email:e.target.value}))} placeholder="Email Anda" style={S.input}/>
-          <label style={S.label}>Password</label>
-          <input type="password" value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} placeholder="••••••••" style={S.input}/>
-          <button onClick={login} style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),width:"100%",padding:13,fontSize:15,marginTop:6}}>Masuk</button>
-          <div style={{marginTop:14,textAlign:"center",fontSize:12,color:"#475569"}}>
-            Hubungi supervisor jika belum memiliki akun
-          </div>
+
+        {/* Tab toggle: Login / Daftar */}
+        <div style={{display:"flex",gap:0,marginBottom:20,background:"#1e293b",borderRadius:12,padding:4,border:"1px solid #334155"}}>
+          <button onClick={()=>{setShowRegister(false);setRegStatus(null);setRegError("");}}
+            style={{flex:1,padding:"10px",borderRadius:9,border:"none",background:!showRegister?"linear-gradient(135deg,#3b82f6,#8b5cf6)":"transparent",color:"white",fontWeight:700,cursor:"pointer",fontSize:14,transition:"all 0.2s"}}>
+            Masuk
+          </button>
+          <button onClick={()=>{setShowRegister(true);setRegStatus(null);setRegError("");}}
+            style={{flex:1,padding:"10px",borderRadius:9,border:"none",background:showRegister?"linear-gradient(135deg,#10b981,#06b6d4)":"transparent",color:showRegister?"white":"#94a3b8",fontWeight:700,cursor:"pointer",fontSize:14,transition:"all 0.2s"}}>
+            Daftar Akun Baru
+          </button>
         </div>
+
+        {/* ── LOGIN FORM ── */}
+        {!showRegister && (
+          <div style={S.card}>
+            <div style={{display:"flex",gap:8,marginBottom:20}}>
+              {["resident","supervisor"].map(r=><button key={r} onClick={()=>setLoginForm(p=>({...p,role:r}))}
+                style={{flex:1,padding:10,borderRadius:10,border:`2px solid ${loginForm.role===r?"#3b82f6":"#334155"}`,background:loginForm.role===r?"#3b82f622":"transparent",color:loginForm.role===r?"#3b82f6":"#94a3b8",fontWeight:700,cursor:"pointer",fontSize:13}}>
+                {r==="resident"?"👨‍⚕️ Residen":"👨‍🏫 Supervisor"}
+              </button>)}
+            </div>
+            <label style={S.label}>Email</label>
+            <input value={loginForm.email} onChange={e=>setLoginForm(p=>({...p,email:e.target.value}))}
+              onKeyDown={e=>e.key==="Enter"&&login()}
+              placeholder="Email Anda" style={S.input}/>
+            <label style={S.label}>Password</label>
+            <input type="password" value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))}
+              onKeyDown={e=>e.key==="Enter"&&login()}
+              placeholder="••••••••" style={S.input}/>
+            <button onClick={login} style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),width:"100%",padding:13,fontSize:15,marginTop:6}}>
+              Masuk
+            </button>
+            <div style={{marginTop:14,textAlign:"center",fontSize:12,color:"#475569"}}>
+              Belum punya akun?{" "}
+              <span onClick={()=>setShowRegister(true)} style={{color:"#3b82f6",cursor:"pointer",fontWeight:600}}>Daftar di sini</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── REGISTER FORM ── */}
+        {showRegister && (
+          <div style={S.card}>
+            {regStatus === "success" ? (
+              <div style={{textAlign:"center",padding:"20px 0"}}>
+                <div style={{fontSize:52,marginBottom:12}}>✅</div>
+                <div style={{color:"#10b981",fontSize:20,fontWeight:900,marginBottom:8}}>Pendaftaran Berhasil!</div>
+                <div style={{color:"#94a3b8",fontSize:14,marginBottom:6}}>Akun Anda telah didaftarkan.</div>
+                <div style={{background:"#0f172a",borderRadius:10,padding:14,marginBottom:16,textAlign:"left"}}>
+                  <div style={{color:"#64748b",fontSize:12,marginBottom:6,fontWeight:700}}>INFO AKUN ANDA:</div>
+                  <div style={{color:"#f1f5f9",fontSize:13}}>👤 {regForm.fullName}</div>
+                  <div style={{color:"#94a3b8",fontSize:12}}>NIM: {regForm.nim}</div>
+                  <div style={{color:"#94a3b8",fontSize:12}}>📧 {regForm.email}</div>
+                </div>
+                <div style={{background:"#1e3a5f",borderRadius:10,padding:12,marginBottom:16,fontSize:12,color:"#94a3b8",textAlign:"left"}}>
+                  ⚠️ <strong style={{color:"#f59e0b"}}>Menunggu aktivasi supervisor.</strong><br/>
+                  Akun Anda akan diaktifkan oleh supervisor sebelum bisa login.<br/>
+                  Hubungi: <span style={{color:"#3b82f6"}}>supervisor@reumatologiusu.ac.id</span>
+                </div>
+                <button onClick={()=>{setShowRegister(false);setRegStatus(null);setRegForm({fullName:"",nim:"",batch:"",phone:"",email:"",password:"",confirmPassword:"",angkatan:""});}}
+                  style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),width:"100%",padding:12}}>
+                  Kembali ke Login
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{color:"#10b981",fontWeight:700,fontSize:14,marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+                  👨‍⚕️ Pendaftaran PPDS Reumatologi FK-USU
+                </div>
+
+                {/* Personal Info */}
+                <div style={{color:"#3b82f6",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Data Pribadi</div>
+                <label style={S.label}>Nama Lengkap (dengan gelar) *</label>
+                <input value={regForm.fullName} onChange={e=>setRegForm(p=>({...p,fullName:e.target.value}))}
+                  placeholder="dr. Nama Lengkap" style={S.input}/>
+
+                <label style={S.label}>NIM *</label>
+                <input value={regForm.nim} onChange={e=>setRegForm(p=>({...p,nim:e.target.value}))}
+                  placeholder="2024001" style={S.input}/>
+
+                <label style={S.label}>No. WhatsApp *</label>
+                <input value={regForm.phone} onChange={e=>setRegForm(p=>({...p,phone:e.target.value}))}
+                  placeholder="08xxxxxxxxxx" style={S.input}/>
+
+                {/* Account Info */}
+                <div style={{color:"#3b82f6",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",margin:"8px 0 8px",paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Akun Login</div>
+                <label style={S.label}>Email *</label>
+                <input type="email" value={regForm.email} onChange={e=>setRegForm(p=>({...p,email:e.target.value}))}
+                  placeholder="nama@ppds.fkusu.ac.id" style={S.input}/>
+
+                <label style={S.label}>Password * (min. 8 karakter)</label>
+                <input type="password" value={regForm.password} onChange={e=>setRegForm(p=>({...p,password:e.target.value}))}
+                  placeholder="••••••••" style={S.input}/>
+
+                <label style={S.label}>Konfirmasi Password *</label>
+                <input type="password" value={regForm.confirmPassword} onChange={e=>setRegForm(p=>({...p,confirmPassword:e.target.value}))}
+                  placeholder="••••••••" style={S.input}/>
+
+                {regError && (
+                  <div style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:8,padding:"10px 14px",marginBottom:12,color:"#ef4444",fontSize:13}}>
+                    ⚠️ {regError}
+                  </div>
+                )}
+
+                <button onClick={register} disabled={regStatus==="loading"}
+                  style={{...S.btn("linear-gradient(135deg,#10b981,#06b6d4)"),width:"100%",padding:13,fontSize:15,marginTop:4,opacity:regStatus==="loading"?0.7:1}}>
+                  {regStatus==="loading" ? "Mendaftarkan..." : "📝 Daftar Sekarang"}
+                </button>
+
+                <div style={{marginTop:12,background:"#0f172a",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#64748b",lineHeight:1.7}}>
+                  🔒 Data Anda aman dan hanya digunakan untuk keperluan akademik PPDS Reumatologi FK-USU.
+                </div>
+
+                <div style={{marginTop:10,textAlign:"center",fontSize:12,color:"#475569"}}>
+                  Sudah punya akun?{" "}
+                  <span onClick={()=>{setShowRegister(false);setRegError("");}} style={{color:"#3b82f6",cursor:"pointer",fontWeight:600}}>Masuk di sini</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
