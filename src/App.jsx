@@ -1013,7 +1013,7 @@ export default function RheumUSU() {
                 <div style={{background:"#1e3a5f",borderRadius:10,padding:12,marginBottom:16,fontSize:12,color:"#94a3b8",textAlign:"left"}}>
                   ⚠️ <strong style={{color:"#f59e0b"}}>Menunggu aktivasi supervisor.</strong><br/>
                   Akun Anda akan diaktifkan oleh supervisor sebelum bisa login.<br/>
-                  Hubungi: <span style={{color:"#3b82f6"}}>supervisor@reumatologiusu.ac.id</span>
+                  Hubungi: <span style={{color:"#3b82f6"}}>reumatofkusu@gmail.com</span>
                 </div>
                 <button onClick={()=>{setShowRegister(false);setRegStatus(null);setRegForm({fullName:"",nim:"",batch:"",phone:"",email:"",password:"",confirmPassword:"",angkatan:""});}}
                   style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),width:"100%",padding:12}}>
