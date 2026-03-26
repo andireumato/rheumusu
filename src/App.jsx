@@ -521,12 +521,14 @@ async function uploadToGoogleDrive({ residentName, residentNim, activityType, to
 // ─ Patient Form ─
 const STEPS = ["👤 Identitas","📍 Rujukan","📏 Antropometri","🕐 Riwayat Penyakit","💊 Terapi & Komorbid","🔬 Laboratorium","📊 Skor & Pencitraan","📝 Catatan"];
 
-function PatientForm({ onClose, onSave }) {
+function PatientForm({ onClose, onSave, initialData=null }) {
   const [step, setStep] = useState(0);
-  // Simpan semua data di ref - tidak trigger re-render saat ketik
-  const data = useRef({...emptyPatient});
-  // Hanya comorbidities yang perlu controlled (untuk tampilan toggle)
-  const [comorbids, setComorbids] = useState([]);
+  // Pre-fill dari initialData jika mode edit
+  const data = useRef(initialData ? {...emptyPatient,...initialData} : {...emptyPatient});
+  const [comorbids, setComorbids] = useState(
+    initialData?.comorbidities && Array.isArray(initialData.comorbidities)
+      ? initialData.comorbidities : []
+  );
   // Trigger re-render manual hanya saat perlu (step change / kalkulasi)
   const [tick, setTick] = useState(0);
   const refresh = () => setTick(t => t+1);
@@ -781,7 +783,7 @@ function PatientForm({ onClose, onSave }) {
       <div style={{background:"#1e293b",borderRadius:20,width:"100%",maxWidth:640,maxHeight:"92vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
         <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #334155"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <h3 style={{color:"#f1f5f9",margin:0,fontSize:15}}>📋 Form Data Pasien Penelitian</h3>
+            <h3 style={{color:"#f1f5f9",margin:0,fontSize:15}}>{initialData?"✏️ Edit Data Pasien":"📋 Form Data Pasien Penelitian"}</h3>
             <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
           </div>
           <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:2}}>
@@ -800,7 +802,7 @@ function PatientForm({ onClose, onSave }) {
           <span style={{color:"#64748b",fontSize:12}}>{step+1} / {STEPS.length}</span>
           {step<STEPS.length-1
             ?<button type="button" onClick={()=>setStep(s=>s+1)} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>Lanjut →</button>
-            :<button type="button" onClick={()=>onSave({...data.current, comorbidities:comorbids})} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>💾 Simpan</button>}
+            :<button type="button" onClick={()=>onSave({...data.current, comorbidities:comorbids})} style={{padding:"8px 18px",borderRadius:10,border:"none",background:initialData?"linear-gradient(135deg,#f59e0b,#f97316)":"linear-gradient(135deg,#10b981,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>{initialData?"💾 Simpan Perubahan":"💾 Simpan"}</button>}
         </div>
       </div>
     </div>
@@ -808,16 +810,30 @@ function PatientForm({ onClose, onSave }) {
 }
 
 
-function PatientDetail({ patient, onClose }) {
+function PatientDetail({ patient, onClose, onEdit }) {
   const res = USERS.residents.find(r=>r.id===patient.residentId);
   const Sec = ({title,children}) => <div style={{marginBottom:16}}><div style={{color:"#3b82f6",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8,paddingBottom:4,borderBottom:"1px solid #1e3a5f"}}>{title}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 16px"}}>{children}</div></div>;
   const Row = ({l,v}) => v?<div><span style={{color:"#64748b",fontSize:12}}>{l}: </span><span style={{color:"#f1f5f9",fontSize:12,fontWeight:500}}>{v}</span></div>:null;
   return (
     <div style={{position:"fixed",inset:0,background:"#000000dd",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
       <div style={{background:"#1e293b",borderRadius:20,width:"100%",maxWidth:680,maxHeight:"92vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
-        <div style={{padding:"18px 22px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><h3 style={{color:"#f1f5f9",margin:0}}>{patient.initials||patient.mrn}</h3><div style={{color:"#64748b",fontSize:12}}>{patient.diagnosis} · Input: {res?.name}</div></div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
+        <div style={{padding:"18px 22px",borderBottom:"1px solid #334155"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:patient.lastUpdatedAt?10:0}}>
+            <div><h3 style={{color:"#f1f5f9",margin:0}}>{patient.initials||patient.mrn}</h3><div style={{color:"#64748b",fontSize:12}}>{patient.diagnosis} · Input: {res?.name}</div></div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {onEdit&&<button onClick={onEdit} style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:10,color:"white",padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5}}>✏️ Edit</button>}
+              <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
+            </div>
+          </div>
+          {patient.lastUpdatedAt&&(
+            <div style={{background:"#0f172a",borderRadius:8,padding:"7px 12px",fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              ✏️ Terakhir diupdate:
+              <strong style={{color:"#94a3b8"}}>{new Date(patient.lastUpdatedAt).toLocaleDateString("id-ID",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</strong>
+              pukul <strong style={{color:"#94a3b8"}}>{new Date(patient.lastUpdatedAt).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</strong>
+              oleh <strong style={{color:"#3b82f6"}}>{patient.lastUpdatedBy}</strong>
+              {patient.updateCount&&<span style={{background:"#3b82f622",borderRadius:20,padding:"1px 8px",color:"#3b82f6"}}>{patient.updateCount}× diupdate</span>}
+            </div>
+          )}
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"18px 22px"}}>
           <Sec title="Identitas & Demografi">
@@ -900,6 +916,7 @@ export default function RheumUSU() {
   const [dataLoading, setDataLoading] = useState(false);
   const [showLogbookModal, setShowLogbookModal] = useState(false);
   const [showPatientModal, setShowPatientModal] = useState(false);
+  const [editingPatient, setEditingPatient] = useState(null); // null = tambah baru, object = edit
   const [showPatientDetail, setShowPatientDetail] = useState(null);
   const [showMaterialDetail, setShowMaterialDetail] = useState(null);
   const [showCalculator, setShowCalculator] = useState(null);
@@ -1013,7 +1030,7 @@ export default function RheumUSU() {
           .order("created_at", {ascending: false});
         console.log("Patients loaded:", ptData?.length, "error:", ptErr?.message);
         if (ptData) setPatients(ptData.map(p => ({
-          id: p.id, residentId: p.resident_id, mrn: p.mrn,
+          id: p.id, residentId: p.resident_id, lastUpdatedAt: p.last_updated_at||null, lastUpdatedBy: p.last_updated_by||null, updateCount: p.update_count||0, mrn: p.mrn,
           initials: p.initials, dob: p.dob, age: p.age, gender: p.gender,
           ethnicity: p.ethnicity, religion: p.religion, marital: p.marital_status,
           education: p.education, occupation: p.occupation, address: p.address,
@@ -1192,6 +1209,96 @@ export default function RheumUSU() {
     setShowLogbookModal(false);
     setNewLogbook({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"", fileName:"", fileData:"", fileType:"" });
   };
+  const updatePatient = async (patientId, data) => {
+    const uid = currentUser.id || currentUser.sub;
+    const updateLog = {
+      updated_by: currentUser.full_name || currentUser.name || currentUser.email,
+      updated_at: new Date().toISOString()
+    };
+    // Simpan log update ke array updates
+    const existingPatient = patients.find(p => p.id === patientId);
+    const updates = existingPatient?.updateLog || [];
+    updates.push(updateLog);
+
+    if (supabase) {
+      const { error } = await supabase.from("patients").update({
+        mrn: data.mrn, initials: data.initials,
+        dob: data.dob || null, age: data.age ? parseInt(data.age) : null,
+        gender: data.gender, religion: data.religion, ethnicity: data.ethnicity,
+        marital_status: data.marital, education: data.education, occupation: data.occupation,
+        address: data.address, phone: data.phone,
+        referral_source: data.referralSource, referral_date: data.referralDate || null,
+        visit_date: data.visitDate || null, visit_type: data.visitType,
+        weight_kg: data.weight ? parseFloat(data.weight) : null,
+        height_cm: data.height ? parseFloat(data.height) : null,
+        bmi: data.bmi ? parseFloat(data.bmi) : null,
+        waist_cm: data.waist ? parseFloat(data.waist) : null,
+        hip_cm: data.hip ? parseFloat(data.hip) : null,
+        whr: data.whr ? parseFloat(data.whr) : null,
+        systolic_bp: data.systolicBp ? parseInt(data.systolicBp) : null,
+        diastolic_bp: data.diastolicBp ? parseInt(data.diastolicBp) : null,
+        heart_rate: data.heartRate ? parseInt(data.heartRate) : null,
+        chief_complaint: data.chiefComplaint, onset_date: data.onsetDate || null,
+        onset_duration: data.onsetDuration ? `${data.onsetDuration} ${data.onsetDurationUnit||"bulan"}` : null,
+        first_diagnosis_date: data.firstDiagnosisDate || null,
+        first_diagnosis_place: data.firstDiagnosisPlace,
+        diagnosis_delay: data.diagnosisDelay, diagnosis_primary: data.diagnosis,
+        diagnosis_secondary: data.diagnosisSecondary, disease_activity: data.diseaseActivity,
+        current_therapy: data.currentTherapy, previous_therapy: data.previousTherapy,
+        steroid_use: data.steroidUse, nsaid_use: data.nsaidUse,
+        comorbidities: data.comorbidities, family_history: data.familyHistory,
+        family_history_detail: data.familyHistoryDetail,
+        smoking: data.smoking, alcohol: data.alcohol,
+        exercise: data.exercise, diet_notes: data.dietNotes,
+        hb: data.hb ? parseFloat(data.hb) : null,
+        wbc: data.wbc ? parseFloat(data.wbc) : null,
+        plt: data.plt ? parseFloat(data.plt) : null,
+        esr: data.esr ? parseFloat(data.esr) : null,
+        crp: data.crp ? parseFloat(data.crp) : null,
+        albumin: data.albumin ? parseFloat(data.albumin) : null,
+        sgot: data.sgot ? parseFloat(data.sgot) : null,
+        sgpt: data.sgpt ? parseFloat(data.sgpt) : null,
+        ureum: data.ureum ? parseFloat(data.ureum) : null,
+        creatinine: data.creatinine ? parseFloat(data.creatinine) : null,
+        gfr: data.gfr ? parseFloat(data.gfr) : null,
+        urine_protein: data.urineProtein || null,
+        rf: data.rf, anti_ccp: data.antiCcp, ana: data.ana,
+        anti_dsdna: data.antidsDna, anti_sm: data.antiSm,
+        antiphospholipid: data.antiphospholipid,
+        c3: data.c3 ? parseFloat(data.c3) : null,
+        c4: data.c4 ? parseFloat(data.c4) : null,
+        uric_acid: data.uricAcid ? parseFloat(data.uricAcid) : null,
+        glucose: data.glucose ? parseFloat(data.glucose) : null,
+        hba1c: data.hba1c ? parseFloat(data.hba1c) : null,
+        cholesterol: data.cholesterol ? parseFloat(data.cholesterol) : null,
+        ldl: data.ldl ? parseFloat(data.ldl) : null,
+        hdl: data.hdl ? parseFloat(data.hdl) : null,
+        tg: data.tg ? parseFloat(data.tg) : null,
+        das28: data.das28 ? parseFloat(data.das28) : null,
+        sdai: data.sdai ? parseFloat(data.sdai) : null,
+        sledai: data.sledai ? parseInt(data.sledai) : null,
+        basdai: data.basdai ? parseFloat(data.basdai) : null,
+        vas: data.vas ? parseFloat(data.vas) : null,
+        xray: data.xray, usg: data.usg, mri: data.mri,
+        biopsy_result: data.biopsyResult,
+        notes: data.notes, input_date: data.inputDate,
+        last_updated_by: updateLog.updated_by,
+        last_updated_at: updateLog.updated_at,
+        update_count: (existingPatient?.updateCount || 0) + 1
+      }).eq("id", patientId);
+      if (error) console.error("Update patient error:", error.message);
+    }
+    setPatients(prev => prev.map(p => p.id === patientId ? {
+      ...p, ...data,
+      updateLog: updates,
+      updateCount: (p.updateCount || 0) + 1,
+      lastUpdatedBy: updateLog.updated_by,
+      lastUpdatedAt: updateLog.updated_at
+    } : p));
+    setEditingPatient(null);
+    setShowPatientModal(false);
+  };
+
   const addPatient = async (data) => {
     const uid = currentUser.id || currentUser.sub;
     if (supabase) {
@@ -1667,9 +1774,9 @@ export default function RheumUSU() {
                 const bmiNum=parseFloat(p.bmi);
                 const bmiColor=bmiNum>=27.5?"#ef4444":bmiNum>=23?"#f59e0b":"#10b981";
                 return(
-                  <div key={p.id} style={{...S.card,cursor:"pointer"}} onClick={()=>setShowPatientDetail(p)}>
+                  <div key={p.id} style={{...S.card,padding:"14px 18px",marginBottom:8}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
-                      <div style={{flex:1}}>
+                      <div style={{flex:1,cursor:"pointer"}} onClick={()=>setShowPatientDetail(p)}>
                         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:5}}>
                           <span style={{fontWeight:900,color:"#f1f5f9",fontSize:15}}>{p.initials||p.mrn}</span>
                           <span style={{...S.badge("#64748b"),fontSize:11}}>{p.mrn}</span>
@@ -1696,7 +1803,16 @@ export default function RheumUSU() {
                       {p.sledai&&<div style={{fontSize:12,color:"#94a3b8"}}>SLEDAI: {p.sledai}</div>}
                       {p.comorbidities?.length>0&&p.comorbidities[0]!=="Tidak Ada"&&<div style={{fontSize:12,color:"#ef444499"}}>🏥 {p.comorbidities.slice(0,2).join(", ")}</div>}
                     </div>
-                    <div style={{marginTop:8,fontSize:11,color:"#334155",textAlign:"right"}}>Klik untuk detail lengkap →</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8,flexWrap:"wrap",gap:6}}>
+                      <div style={{fontSize:11,color:"#334155",cursor:"pointer"}} onClick={()=>setShowPatientDetail(p)}>Klik untuk detail lengkap →</div>
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        {p.lastUpdatedAt&&<span style={{fontSize:10,color:"#475569"}}>✏️ {new Date(p.lastUpdatedAt).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"})}</span>}
+                        <button onClick={e=>{e.stopPropagation();setEditingPatient(p);setShowPatientModal(true);}}
+                          style={{background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:8,color:"#f59e0b",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
+                          ✏️ Edit
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -1814,8 +1930,16 @@ export default function RheumUSU() {
         </div>
       )}
 
-      {showPatientModal&&<PatientForm onClose={()=>setShowPatientModal(false)} onSave={addPatient}/>}
-      {showPatientDetail&&<PatientDetail patient={showPatientDetail} onClose={()=>setShowPatientDetail(null)}/>}
+      {showPatientModal&&<PatientForm
+        onClose={()=>{setShowPatientModal(false);setEditingPatient(null);}}
+        onSave={data=>editingPatient?updatePatient(editingPatient.id,data):addPatient(data)}
+        initialData={editingPatient}
+      />}
+      {showPatientDetail&&<PatientDetail
+        patient={showPatientDetail}
+        onClose={()=>setShowPatientDetail(null)}
+        onEdit={()=>{setEditingPatient(showPatientDetail);setShowPatientDetail(null);setShowPatientModal(true);}}
+      />}
 
       {showMaterialDetail&&(
         <div style={S.modal} onClick={()=>setShowMaterialDetail(null)}>
