@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // Lazy Supabase client - hanya dibuat saat env vars tersedia
@@ -523,25 +523,63 @@ const STEPS = ["👤 Identitas","📍 Rujukan","📏 Antropometri","🕐 Riwayat
 
 function PatientForm({ onClose, onSave }) {
   const [step, setStep] = useState(0);
-  const [p, setP] = useState({...emptyPatient});
-  const set = (k,v) => setP(prev=>({...prev,[k]:v}));
-  const toggleComorbid = (v) => setP(prev=>({...prev, comorbidities: prev.comorbidities.includes(v)?prev.comorbidities.filter(x=>x!==v):[...prev.comorbidities,v]}));
+  // Gunakan useRef untuk form data agar tidak re-render saat ketik
+  const formRef = useRef({...emptyPatient});
+  const [comorbidities, setComorbidities] = useState([]);
+  const [bmiDisplay, setBmiDisplay] = useState("");
+  const [whrDisplay, setWhrDisplay] = useState("");
+  const [summaryKey, setSummaryKey] = useState(0);
+
+  // Ambil semua nilai terkini dari form
+  const getFormData = () => ({ ...formRef.current, comorbidities });
 
   const IS = { width:"100%", background:"#0f172a", border:"1px solid #334155", borderRadius:8, padding:"9px 12px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box", marginBottom:10 };
   const LB = { color:"#94a3b8", fontSize:11, fontWeight:700, display:"block", marginBottom:3, textTransform:"uppercase", letterSpacing:"0.05em" };
   const G2 = { display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 };
   const G3 = { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 };
   const SH = { color:"#3b82f6", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"16px 0 8px", paddingBottom:5, borderBottom:"1px solid #1e3a5f" };
-  const Field = ({k,l,type="text",ph=""}) => <div><label style={LB}>{l}</label><input type={type} value={p[k]} onChange={e=>set(k,e.target.value)} placeholder={ph} style={IS}/></div>;
-  const Select = ({k,l,opts}) => <div><label style={LB}>{l}</label><select value={p[k]} onChange={e=>set(k,e.target.value)} style={IS}><option value="">Pilih...</option>{opts.map(o=><option key={o}>{o}</option>)}</select></div>;
+
+  // Uncontrolled Field - tidak trigger re-render parent saat ketik
+  const Field = useCallback(({k, l, type="text", ph=""}) => (
+    <div>
+      <label style={LB}>{l}</label>
+      <input
+        type={type}
+        defaultValue={formRef.current[k] || ""}
+        onBlur={e => { formRef.current[k] = e.target.value; }}
+        onChange={e => { formRef.current[k] = e.target.value; }}
+        placeholder={ph}
+        style={IS}
+      />
+    </div>
+  ), []);
+
+  const Select = useCallback(({k, l, opts}) => (
+    <div>
+      <label style={LB}>{l}</label>
+      <select
+        defaultValue={formRef.current[k] || ""}
+        onChange={e => { formRef.current[k] = e.target.value; }}
+        style={IS}
+      >
+        <option value="">Pilih...</option>
+        {opts.map(o => <option key={o}>{o}</option>)}
+      </select>
+    </div>
+  ), []);
+
+  const set = (k, v) => { formRef.current[k] = v; };
+  const toggleComorbid = (v) => setComorbidities(prev =>
+    prev.includes(v) ? prev.filter(x=>x!==v) : [...prev, v]
+  );
 
   const calcBmi = () => {
-    const w=parseFloat(p.weight),h=parseFloat(p.height)/100;
-    if(w>0&&h>0)set("bmi",(w/(h*h)).toFixed(1));
+    const w=parseFloat(formRef.current.weight), h=parseFloat(formRef.current.height)/100;
+    if(w>0&&h>0){ const bmi=(w/(h*h)).toFixed(1); set("bmi",bmi); setBmiDisplay(bmi); }
   };
   const calcWhr = () => {
-    const w=parseFloat(p.waist),h=parseFloat(p.hip);
-    if(w>0&&h>0)set("whr",(w/h).toFixed(2));
+    const w=parseFloat(formRef.current.waist), h=parseFloat(formRef.current.hip);
+    if(w>0&&h>0){ const whr=(w/h).toFixed(2); set("whr",whr); setWhrDisplay(whr); }
   };
   const calcDelay = (onset,dx) => {
     if(onset&&dx){
@@ -556,15 +594,15 @@ function PatientForm({ onClose, onSave }) {
         <div style={SH}>Identitas Pasien</div>
         <div style={G2}><Field k="mrn" l="No. Rekam Medis *" ph="RSH-2024-XXX"/><Field k="initials" l="Inisial Pasien *" ph="Ny. SR / Tn. AB"/></div>
         <div style={G2}>
-          <div><label style={LB}>Tanggal Lahir</label><input type="date" value={p.dob} onChange={e=>{set("dob",e.target.value);if(e.target.value){const d=Math.floor((new Date()-new Date(e.target.value))/(365.25*24*3600*1000));set("age",d);}}} style={IS}/></div>
+          <div><label style={LB}>Tanggal Lahir</label><input type="date" defaultValue={formRef.current.dob} onChange={e=>{formRef.current["dob"]=e.target.value; set("dob",e.target.value);if(e.target.value){const d=Math.floor((new Date()-new Date(e.target.value))/(365.25*24*3600*1000)); set("age",d); e.target.nextSibling && (e.target.nextSibling.value = d);}}} style={IS}/></div>
           <Field k="age" l="Usia (tahun) *" type="number" ph="45"/>
         </div>
         <div style={G2}>
-          <div><label style={LB}>Jenis Kelamin *</label><select value={p.gender} onChange={e=>set("gender",e.target.value)} style={IS}><option value="P">Perempuan</option><option value="L">Laki-laki</option></select></div>
-          <div><label style={LB}>Agama</label><select value={p.religion} onChange={e=>set("religion",e.target.value)} style={IS}><option value="">Pilih...</option>{["Islam","Kristen Protestan","Katolik","Hindu","Buddha","Konghucu"].map(r=><option key={r}>{r}</option>)}</select></div>
+          <div><label style={LB}>Jenis Kelamin *</label><select defaultValue={formRef.current.gender} onChange={e=>{formRef.current["gender"]=e.target.value; set("gender",e.target.value);}} style={IS}><option value="P">Perempuan</option><option value="L">Laki-laki</option></select></div>
+          <div><label style={LB}>Agama</label><select defaultValue={formRef.current.religion} onChange={e=>{formRef.current["religion"]=e.target.value; set("religion",e.target.value);}} style={IS}><option value="">Pilih...</option>{["Islam","Kristen Protestan","Katolik","Hindu","Buddha","Konghucu"].map(r=><option key={r}>{r}</option>)}</select></div>
         </div>
         <div style={SH}>Data Demografis & Sosial</div>
-        <div><label style={LB}>Suku / Etnis *</label><select value={p.ethnicity} onChange={e=>set("ethnicity",e.target.value)} style={IS}><option value="">Pilih suku...</option>{ETHNICITIES.map(e=><option key={e}>{e}</option>)}</select></div>
+        <div><label style={LB}>Suku / Etnis *</label><select defaultValue={formRef.current.ethnicity} onChange={e=>{formRef.current["ethnicity"]=e.target.value; set("ethnicity",e.target.value);}} style={IS}><option value="">Pilih suku...</option>{ETHNICITIES.map(e=><option key={e}>{e}</option>)}</select></div>
         <div style={G2}>
           <Select k="marital" l="Status Perkawinan *" opts={MARITAL_STATUS}/>
           <Select k="education" l="Tingkat Pendidikan *" opts={EDUCATION_LEVELS}/>
@@ -577,38 +615,38 @@ function PatientForm({ onClose, onSave }) {
       <div>
         <div style={SH}>Sumber Rujukan</div>
         <Select k="referralSource" l="Dirujuk dari *" opts={REFERRAL_SOURCES}/>
-        <div style={G2}><div><label style={LB}>Tanggal Rujukan</label><input type="date" value={p.referralDate} onChange={e=>set("referralDate",e.target.value)} style={IS}/></div><div><label style={LB}>Tanggal Kunjungan *</label><input type="date" value={p.visitDate} onChange={e=>set("visitDate",e.target.value)} style={IS}/></div></div>
-        <div><label style={LB}>Jenis Kunjungan</label><select value={p.visitType} onChange={e=>set("visitType",e.target.value)} style={IS}>{["Rawat Jalan (Baru)","Rawat Jalan (Kontrol)","Rawat Inap"].map(v=><option key={v}>{v}</option>)}</select></div>
+        <div style={G2}><div><label style={LB}>Tanggal Rujukan</label><input type="date" defaultValue={formRef.current.referralDate} onChange={e=>{formRef.current["referralDate"]=e.target.value; set("referralDate",e.target.value);}} style={IS}/></div><div><label style={LB}>Tanggal Kunjungan *</label><input type="date" defaultValue={formRef.current.visitDate} onChange={e=>{formRef.current["visitDate"]=e.target.value; set("visitDate",e.target.value);}} style={IS}/></div></div>
+        <div><label style={LB}>Jenis Kunjungan</label><select defaultValue={formRef.current.visitType} onChange={e=>{formRef.current["visitType"]=e.target.value; set("visitType",e.target.value);}} style={IS}>{["Rawat Jalan (Baru)","Rawat Jalan (Kontrol)","Rawat Inap"].map(v=><option key={v}>{v}</option>)}</select></div>
       </div>
     );
     if(step===2) return (
       <div>
         <div style={SH}>Antropometri</div>
         <div style={G2}>
-          <div><label style={LB}>Berat Badan (kg)</label><input type="number" value={p.weight} onChange={e=>set("weight",e.target.value)} onBlur={calcBmi} placeholder="70" style={IS}/></div>
-          <div><label style={LB}>Tinggi Badan (cm)</label><input type="number" value={p.height} onChange={e=>set("height",e.target.value)} onBlur={calcBmi} placeholder="165" style={IS}/></div>
+          <div><label style={LB}>Berat Badan (kg)</label><input type="number" defaultValue={formRef.current.weight} onChange={e=>{formRef.current["weight"]=e.target.value; set("weight",e.target.value);}} onBlur={calcBmi} placeholder="70" style={IS}/></div>
+          <div><label style={LB}>Tinggi Badan (cm)</label><input type="number" defaultValue={formRef.current.height} onChange={e=>{formRef.current["height"]=e.target.value; set("height",e.target.value);}} onBlur={calcBmi} placeholder="165" style={IS}/></div>
         </div>
         <div style={G2}>
           <div>
             <label style={LB}>IMT / BMI (kg/m²)</label>
-            <div style={{display:"flex",gap:6}}><input type="number" value={p.bmi} onChange={e=>set("bmi",e.target.value)} placeholder="Auto-hitung" style={{...IS,marginBottom:0,flex:1}}/><button onClick={calcBmi} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10}}>Hitung</button></div>
-            {p.bmi&&<div style={{fontSize:11,color:parseFloat(p.bmi)>=27.5?"#ef4444":parseFloat(p.bmi)>=23?"#f59e0b":"#10b981",marginBottom:8}}>{parseFloat(p.bmi)>=27.5?"⚠ Obesitas II (≥27.5)":parseFloat(p.bmi)>=25?"⚠ Obese I (25–27.4)":parseFloat(p.bmi)>=23?"⚠ Overweight (23–24.9)":parseFloat(p.bmi)>=18.5?"✓ Normal":"⚠ Underweight"}</div>}
+            <div style={{display:"flex",gap:6}}><input type="number" defaultValue={formRef.current.bmi} onChange={e=>{formRef.current["bmi"]=e.target.value; set("bmi",e.target.value);}} placeholder="Auto-hitung" style={{...IS,marginBottom:0,flex:1}}/><button onClick={calcBmi} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10}}>Hitung</button></div>
+            {bmiDisplay&&<div style={{fontSize:11,color:parseFloat(bmiDisplay)>=27.5?"#ef4444":parseFloat(p.bmi)>=23?"#f59e0b":"#10b981",marginBottom:8}}>{parseFloat(p.bmi)>=27.5?"⚠ Obesitas II (≥27.5)":parseFloat(bmiDisplay)>=25?"⚠ Obese I (25–27.4)":parseFloat(bmiDisplay)>=23?"⚠ Overweight (23–24.9)":parseFloat(bmiDisplay)>=18.5?"✓ Normal":"⚠ Underweight"}</div>}
           </div>
           <div style={{background:"#0f172a",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#64748b",lineHeight:1.7,height:"fit-content"}}>&lt;18.5 Underweight<br/>18.5–22.9 Normal<br/>23–24.9 Overweight<br/>25–27.4 Obese I<br/>≥27.5 Obese II</div>
         </div>
         <div style={G2}>
           <div>
             <label style={LB}>Lingkar Pinggang (cm)</label>
-            <input type="number" value={p.waist} onChange={e=>set("waist",e.target.value)} onBlur={calcWhr} placeholder="80" style={IS}/>
-            {p.waist&&<div style={{fontSize:11,color:(p.gender==="P"&&parseFloat(p.waist)>=80)||(p.gender==="L"&&parseFloat(p.waist)>=90)?"#ef4444":"#10b981",marginBottom:8}}>{p.gender==="P"?(parseFloat(p.waist)>=80?"⚠ Risiko tinggi (P ≥80cm)":"✓ Normal P"):(parseFloat(p.waist)>=90?"⚠ Risiko tinggi (L ≥90cm)":"✓ Normal L")}</div>}
+            <input type="number" defaultValue={formRef.current.waist} onChange={e=>{formRef.current["waist"]=e.target.value; set("waist",e.target.value);}} onBlur={calcWhr} placeholder="80" style={IS}/>
+            {formRef.current.waist&&<div style={{fontSize:11,color:(formRef.current.gender==="P"&&parseFloat(formRef.current.waist)>=80)||(p.gender==="L"&&parseFloat(p.waist)>=90)?"#ef4444":"#10b981",marginBottom:8}}>{formRef.current.gender==="P"?(parseFloat(formRef.current.waist)>=80?"⚠ Risiko tinggi (P ≥80cm)":"✓ Normal P"):(parseFloat(formRef.current.waist)>=90?"⚠ Risiko tinggi (L ≥90cm)":"✓ Normal L")}</div>}
           </div>
           <div>
             <label style={LB}>Lingkar Panggul (cm)</label>
-            <input type="number" value={p.hip} onChange={e=>set("hip",e.target.value)} onBlur={calcWhr} placeholder="95" style={IS}/>
+            <input type="number" defaultValue={formRef.current.hip} onChange={e=>{formRef.current["hip"]=e.target.value; set("hip",e.target.value);}} onBlur={calcWhr} placeholder="95" style={IS}/>
           </div>
         </div>
         <div style={G2}>
-          <div><label style={LB}>Rasio Pinggang/Panggul (WHR)</label><div style={{display:"flex",gap:6}}><input type="number" value={p.whr} onChange={e=>set("whr",e.target.value)} placeholder="Auto" style={{...IS,marginBottom:0,flex:1}}/><button onClick={calcWhr} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10}}>Hitung</button></div></div>
+          <div><label style={LB}>Rasio Pinggang/Panggul (WHR)</label><div style={{display:"flex",gap:6}}><input type="number" defaultValue={formRef.current.whr} onChange={e=>{formRef.current["whr"]=e.target.value; set("whr",e.target.value);}} placeholder="Auto" style={{...IS,marginBottom:0,flex:1}}/><button onClick={calcWhr} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10}}>Hitung</button></div></div>
           <div></div>
         </div>
         <div style={SH}>Tanda Vital</div>
@@ -622,23 +660,23 @@ function PatientForm({ onClose, onSave }) {
     if(step===3) return (
       <div>
         <div style={SH}>Keluhan & Onset Gejala</div>
-        <div><label style={LB}>Keluhan Utama</label><textarea value={p.chiefComplaint} onChange={e=>set("chiefComplaint",e.target.value)} placeholder="Nyeri sendi, bengkak, kaku pagi hari..." rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>Keluhan Utama</label><textarea defaultValue={formRef.current.chiefComplaint} onChange={e=>{formRef.current["chiefComplaint"]=e.target.value; set("chiefComplaint",e.target.value);}} placeholder="Nyeri sendi, bengkak, kaku pagi hari..." rows={2} style={{...IS,resize:"vertical"}}/></div>
         <div style={G2}>
-          <div><label style={LB}>Tanggal / Perkiraan Onset Gejala *</label><input type="date" value={p.onsetDate} onChange={e=>{set("onsetDate",e.target.value);calcDelay(e.target.value,p.firstDiagnosisDate);}} style={IS}/></div>
-          <div><label style={LB}>Durasi Sebelum Diagnosis</label><div style={{display:"flex",gap:6}}><input type="number" value={p.onsetDuration} onChange={e=>set("onsetDuration",e.target.value)} placeholder="6" style={{...IS,marginBottom:0,flex:1}}/><select value={p.onsetDurationUnit} onChange={e=>set("onsetDurationUnit",e.target.value)} style={{...IS,marginBottom:0,width:"auto"}}><option>hari</option><option>minggu</option><option>bulan</option><option>tahun</option></select></div></div>
+          <div><label style={LB}>Tanggal / Perkiraan Onset Gejala *</label><input type="date" defaultValue={formRef.current.onsetDate} onChange={e=>{formRef.current["onsetDate"]=e.target.value; set("onsetDate",e.target.value);calcDelay(e.target.value,p.firstDiagnosisDate);}} style={IS}/></div>
+          <div><label style={LB}>Durasi Sebelum Diagnosis</label><div style={{display:"flex",gap:6}}><input type="number" defaultValue={formRef.current.onsetDuration} onChange={e=>{formRef.current["onsetDuration"]=e.target.value; set("onsetDuration",e.target.value);}} placeholder="6" style={{...IS,marginBottom:0,flex:1}}/><select defaultValue={formRef.current.onsetDurationUnit} onChange={e=>{formRef.current["onsetDurationUnit"]=e.target.value; set("onsetDurationUnit",e.target.value);}} style={{...IS,marginBottom:0,width:"auto"}}><option>hari</option><option>minggu</option><option>bulan</option><option>tahun</option></select></div></div>
         </div>
         <div style={SH}>Diagnosis</div>
         <div style={G2}>
-          <div><label style={LB}>Tanggal Diagnosis Pertama *</label><input type="date" value={p.firstDiagnosisDate} onChange={e=>{set("firstDiagnosisDate",e.target.value);calcDelay(p.onsetDate,e.target.value);}} style={IS}/></div>
+          <div><label style={LB}>Tanggal Diagnosis Pertama *</label><input type="date" defaultValue={formRef.current.firstDiagnosisDate} onChange={e=>{formRef.current["firstDiagnosisDate"]=e.target.value; set("firstDiagnosisDate",e.target.value);calcDelay(p.onsetDate,e.target.value);}} style={IS}/></div>
           <Field k="firstDiagnosisPlace" l="Tempat Diagnosis Pertama" ph="RS / Klinik"/>
         </div>
-        <div><label style={LB}>Diagnostic Delay (otomatis / isi manual)</label><input value={p.diagnosisDelay} onChange={e=>set("diagnosisDelay",e.target.value)} placeholder="Selisih onset – diagnosis pertama" style={IS}/></div>
-        <div><label style={LB}>Diagnosis Utama *</label><select value={p.diagnosis} onChange={e=>set("diagnosis",e.target.value)} style={IS}><option value="">Pilih...</option>{DIAGNOSES.map(d=><option key={d}>{d}</option>)}</select></div>
+        <div><label style={LB}>Diagnostic Delay (otomatis / isi manual)</label><input defaultValue={formRef.current.diagnosisDelay} onChange={e=>{formRef.current["diagnosisDelay"]=e.target.value; set("diagnosisDelay",e.target.value);}} placeholder="Selisih onset – diagnosis pertama" style={IS}/></div>
+        <div><label style={LB}>Diagnosis Utama *</label><select defaultValue={formRef.current.diagnosis} onChange={e=>{formRef.current["diagnosis"]=e.target.value; set("diagnosis",e.target.value);}} style={IS}><option value="">Pilih...</option>{DIAGNOSES.map(d=><option key={d}>{d}</option>)}</select></div>
         <Field k="diagnosisSecondary" l="Diagnosis Sekunder / Overlap" ph="Lupus Nefritis, NPSLE..."/>
-        <div><label style={LB}>Aktivitas Penyakit (klinis)</label><select value={p.diseaseActivity} onChange={e=>set("diseaseActivity",e.target.value)} style={IS}><option value="">Pilih...</option>{["Remisi","Aktivitas Rendah","Aktivitas Sedang","Aktivitas Tinggi","Flare Akut"].map(d=><option key={d}>{d}</option>)}</select></div>
+        <div><label style={LB}>Aktivitas Penyakit (klinis)</label><select defaultValue={formRef.current.diseaseActivity} onChange={e=>{formRef.current["diseaseActivity"]=e.target.value; set("diseaseActivity",e.target.value);}} style={IS}><option value="">Pilih...</option>{["Remisi","Aktivitas Rendah","Aktivitas Sedang","Aktivitas Tinggi","Flare Akut"].map(d=><option key={d}>{d}</option>)}</select></div>
         <div style={SH}>Riwayat Keluarga</div>
         <div style={G2}>
-          <div><label style={LB}>Riwayat Penyakit Serupa dalam Keluarga</label><select value={p.familyHistory} onChange={e=>set("familyHistory",e.target.value)} style={IS}><option value="">-</option><option>Ya</option><option>Tidak</option><option>Tidak Diketahui</option></select></div>
+          <div><label style={LB}>Riwayat Penyakit Serupa dalam Keluarga</label><select defaultValue={formRef.current.familyHistory} onChange={e=>{formRef.current["familyHistory"]=e.target.value; set("familyHistory",e.target.value);}} style={IS}><option value="">-</option><option>Ya</option><option>Tidak</option><option>Tidak Diketahui</option></select></div>
           <Field k="familyHistoryDetail" l="Hubungan Keluarga" ph="Ibu kandung, saudara kandung..."/>
         </div>
       </div>
@@ -646,22 +684,22 @@ function PatientForm({ onClose, onSave }) {
     if(step===4) return (
       <div>
         <div style={SH}>Riwayat Terapi</div>
-        <div><label style={LB}>Terapi Sebelumnya</label><textarea value={p.previousTherapy} onChange={e=>set("previousTherapy",e.target.value)} placeholder="MTX, HCQ, prednison..." rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>Terapi Saat Ini *</label><textarea value={p.currentTherapy} onChange={e=>set("currentTherapy",e.target.value)} placeholder="MTX 15mg/minggu + HCQ 400mg/hari" rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>Terapi Sebelumnya</label><textarea defaultValue={formRef.current.previousTherapy} onChange={e=>{formRef.current["previousTherapy"]=e.target.value; set("previousTherapy",e.target.value);}} placeholder="MTX, HCQ, prednison..." rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>Terapi Saat Ini *</label><textarea defaultValue={formRef.current.currentTherapy} onChange={e=>{formRef.current["currentTherapy"]=e.target.value; set("currentTherapy",e.target.value);}} placeholder="MTX 15mg/minggu + HCQ 400mg/hari" rows={2} style={{...IS,resize:"vertical"}}/></div>
         <div style={G2}>
-          <div><label style={LB}>Penggunaan Steroid</label><select value={p.steroidUse} onChange={e=>set("steroidUse",e.target.value)} style={IS}><option value="">-</option><option>Tidak</option><option>Ya – dosis rendah (&lt;7.5mg/hari)</option><option>Ya – dosis sedang (7.5–30mg)</option><option>Ya – dosis tinggi (&gt;30mg)</option><option>Pulse IV</option></select></div>
-          <div><label style={LB}>Penggunaan NSAID</label><select value={p.nsaidUse} onChange={e=>set("nsaidUse",e.target.value)} style={IS}><option value="">-</option><option>Tidak</option><option>Sesekali (PRN)</option><option>Reguler</option></select></div>
+          <div><label style={LB}>Penggunaan Steroid</label><select defaultValue={formRef.current.steroidUse} onChange={e=>{formRef.current["steroidUse"]=e.target.value; set("steroidUse",e.target.value);}} style={IS}><option value="">-</option><option>Tidak</option><option>Ya – dosis rendah (&lt;7.5mg/hari)</option><option>Ya – dosis sedang (7.5–30mg)</option><option>Ya – dosis tinggi (&gt;30mg)</option><option>Pulse IV</option></select></div>
+          <div><label style={LB}>Penggunaan NSAID</label><select defaultValue={formRef.current.nsaidUse} onChange={e=>{formRef.current["nsaidUse"]=e.target.value; set("nsaidUse",e.target.value);}} style={IS}><option value="">-</option><option>Tidak</option><option>Sesekali (PRN)</option><option>Reguler</option></select></div>
         </div>
         <div style={SH}>Komorbiditas</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}}>
-          {COMORBIDITIES_LIST.map(c=><button key={c} onClick={()=>toggleComorbid(c)} style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${p.comorbidities.includes(c)?"#3b82f6":"#334155"}`,background:p.comorbidities.includes(c)?"#3b82f622":"transparent",color:p.comorbidities.includes(c)?"#3b82f6":"#94a3b8",fontSize:12,cursor:"pointer",fontWeight:p.comorbidities.includes(c)?700:400}}>{p.comorbidities.includes(c)?"✓ ":""}{c}</button>)}
+          {COMORBIDITIES_LIST.map(c=><button key={c} onClick={()=>toggleComorbid(c)} style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${comorbidities.includes(c)?"#3b82f6":"#334155"}`,background:comorbidities.includes(c)?"#3b82f622":"transparent",color:comorbidities.includes(c)?"#3b82f6":"#94a3b8",fontSize:12,cursor:"pointer",fontWeight:comorbidities.includes(c)?700:400}}>{comorbidities.includes(c)?"✓ ":""}{c}</button>)}
         </div>
         <Field k="comorbidNotes" l="Catatan Komorbid Tambahan" ph="Detail tambahan..."/>
         <div style={SH}>Gaya Hidup</div>
         <div style={G3}>
-          <div><label style={LB}>Merokok</label><select value={p.smoking} onChange={e=>set("smoking",e.target.value)} style={IS}><option>Tidak Pernah</option><option>Mantan Perokok</option><option>Perokok Aktif</option></select></div>
+          <div><label style={LB}>Merokok</label><select defaultValue={formRef.current.smoking} onChange={e=>{formRef.current["smoking"]=e.target.value; set("smoking",e.target.value);}} style={IS}><option>Tidak Pernah</option><option>Mantan Perokok</option><option>Perokok Aktif</option></select></div>
           <Field k="smokingPackYear" l="Pack-Year" type="number" ph="0"/>
-          <div><label style={LB}>Alkohol</label><select value={p.alcohol} onChange={e=>set("alcohol",e.target.value)} style={IS}><option>Tidak</option><option>Kadang</option><option>Rutin</option></select></div>
+          <div><label style={LB}>Alkohol</label><select defaultValue={formRef.current.alcohol} onChange={e=>{formRef.current["alcohol"]=e.target.value; set("alcohol",e.target.value);}} style={IS}><option>Tidak</option><option>Kadang</option><option>Rutin</option></select></div>
         </div>
         <div style={G2}><Field k="exercise" l="Aktivitas Fisik / Olahraga" ph="Jalan kaki 3x/minggu..."/><Field k="dietNotes" l="Catatan Diet" ph="Diet rendah purin..."/></div>
       </div>
@@ -681,20 +719,20 @@ function PatientForm({ onClose, onSave }) {
         <div style={SH}>Skor Aktivitas Penyakit</div>
         <div style={G3}>{[["das28","DAS28"],["sdai","SDAI"],["sledai","SLEDAI-2K"],["basdai","BASDAI"],["vas","VAS Nyeri (0–10)"]].map(([k,l])=><div key={k}><label style={LB}>{l}</label><input type="number" value={p[k]} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>)}</div>
         <div style={SH}>Pencitraan & Histopatologi</div>
-        <div><label style={LB}>Foto Rontgen</label><textarea value={p.xray} onChange={e=>set("xray",e.target.value)} placeholder="Erosi sendi MCP bilateral..." rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>USG Sendi</label><textarea value={p.usg} onChange={e=>set("usg",e.target.value)} placeholder="Double contour sign, tofus..." rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>MRI</label><textarea value={p.mri} onChange={e=>set("mri",e.target.value)} placeholder="Sinovitis, bone marrow edema..." rows={2} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>Biopsi / Histopatologi</label><textarea value={p.biopsyResult} onChange={e=>set("biopsyResult",e.target.value)} placeholder="GN proliferatif difus WHO kelas IV..." rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>Foto Rontgen</label><textarea defaultValue={formRef.current.xray} onChange={e=>{formRef.current["xray"]=e.target.value; set("xray",e.target.value);}} placeholder="Erosi sendi MCP bilateral..." rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>USG Sendi</label><textarea defaultValue={formRef.current.usg} onChange={e=>{formRef.current["usg"]=e.target.value; set("usg",e.target.value);}} placeholder="Double contour sign, tofus..." rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>MRI</label><textarea defaultValue={formRef.current.mri} onChange={e=>{formRef.current["mri"]=e.target.value; set("mri",e.target.value);}} placeholder="Sinovitis, bone marrow edema..." rows={2} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>Biopsi / Histopatologi</label><textarea defaultValue={formRef.current.biopsyResult} onChange={e=>{formRef.current["biopsyResult"]=e.target.value; set("biopsyResult",e.target.value);}} placeholder="GN proliferatif difus WHO kelas IV..." rows={2} style={{...IS,resize:"vertical"}}/></div>
       </div>
     );
     if(step===7) return (
       <div>
         <div style={SH}>Catatan & Konfirmasi</div>
-        <div><label style={LB}>Catatan Klinis / Penelitian</label><textarea value={p.notes} onChange={e=>set("notes",e.target.value)} placeholder="Catatan tambahan yang relevan..." rows={4} style={{...IS,resize:"vertical"}}/></div>
-        <div><label style={LB}>Tanggal Input Data</label><input type="date" value={p.inputDate} onChange={e=>set("inputDate",e.target.value)} style={IS}/></div>
+        <div><label style={LB}>Catatan Klinis / Penelitian</label><textarea value={formRef.current.notes} onChange={e=>{formRef.current["notes"]=e.target.value; set("notes",e.target.value);}} placeholder="Catatan tambahan yang relevan..." rows={4} style={{...IS,resize:"vertical"}}/></div>
+        <div><label style={LB}>Tanggal Input Data</label><input type="date" value={formRef.current.inputDate} onChange={e=>{formRef.current["inputDate"]=e.target.value; set("inputDate",e.target.value);}} style={IS}/></div>
         <div style={{background:"#0f172a",borderRadius:12,padding:16,marginTop:8}}>
           <div style={{color:"#94a3b8",fontWeight:700,fontSize:12,marginBottom:10}}>📋 Ringkasan</div>
-          {[[p.mrn,"No. RM"],[`${p.initials||"-"}, ${p.age}th ${p.gender==="P"?"♀":"♂"}`,"Pasien"],[p.ethnicity,"Suku"],[p.education,"Pendidikan"],[p.occupation,"Pekerjaan"],[p.marital,"Status"],[p.referralSource,"Rujukan"],[p.visitDate,"Tgl Kunjungan"],[p.bmi?`${p.bmi} kg/m²`:"","IMT"],[p.waist?`${p.waist}cm`:"","Pinggang"],[p.diagnosis,"Diagnosis"],[p.onsetDate,"Onset"],[p.firstDiagnosisDate,"Tgl Dx Pertama"],[p.diagnosisDelay,"Diagnostic Delay"],[p.diseaseActivity,"Aktivitas"],[p.das28,"DAS28"],[p.sledai,"SLEDAI"],[p.comorbidities.join(", "),"Komorbid"],[p.currentTherapy,"Terapi"]].filter(([v])=>v).map(([v,k])=>(
+          {[[formRef.current.mrn,"No. RM"],[`${formRef.current.initials||"-"}, ${formRef.current.age}th ${formRef.current.gender==="P"?"♀":"♂"}`,"Pasien"],[formRef.current.ethnicity,"Suku"],[formRef.current.education,"Pendidikan"],[formRef.current.occupation,"Pekerjaan"],[formRef.current.marital,"Status"],[formRef.current.referralSource,"Rujukan"],[formRef.current.visitDate,"Tgl Kunjungan"],[formRef.current.bmi?`${formRef.current.bmi} kg/m²`:"","IMT"],[formRef.current.waist?`${formRef.current.waist}cm`:"","Pinggang"],[formRef.current.diagnosis,"Diagnosis"],[formRef.current.onsetDate,"Onset"],[formRef.current.firstDiagnosisDate,"Tgl Dx Pertama"],[formRef.current.diagnosisDelay,"Diagnostic Delay"],[formRef.current.diseaseActivity,"Aktivitas"],[formRef.current.das28,"DAS28"],[formRef.current.sledai,"SLEDAI"],[formRef.current.comorbidities.join(", "),"Komorbid"],[formRef.current.currentTherapy,"Terapi"]].filter(([v])=>v).map(([v,k])=>(
             <div key={k} style={{display:"flex",gap:8,marginBottom:3}}><span style={{color:"#64748b",fontSize:12,minWidth:120}}>{k}:</span><span style={{color:"#f1f5f9",fontSize:12}}>{v}</span></div>
           ))}
         </div>
@@ -720,7 +758,7 @@ function PatientForm({ onClose, onSave }) {
           <span style={{color:"#64748b",fontSize:12}}>{step+1} / {STEPS.length}</span>
           {step<STEPS.length-1
             ?<button onClick={()=>setStep(s=>s+1)} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>Lanjut →</button>
-            :<button onClick={()=>onSave(p)} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>💾 Simpan</button>}
+            :<button onClick={()=>{ setSummaryKey(k=>k+1); onSave(getFormData()); }} style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700,fontSize:13}}>💾 Simpan</button>}
         </div>
       </div>
     </div>
