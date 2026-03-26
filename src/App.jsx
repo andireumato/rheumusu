@@ -937,13 +937,18 @@ export default function RheumUSU() {
       try {
         // Load profiles/residents
         const { data: profilesData } = await supabase
-          .from("profiles").select("*").eq("role","resident").order("full_name");
-        if (profilesData) setResidents(profilesData);
+          .from("profiles").select("*").order("full_name");
+        if (profilesData) {
+          setResidents(profilesData.filter(p => p.role === "resident"));
+          // Update currentUser profile jika ada perubahan
+          const myProfile = profilesData.find(p => p.id === uid);
+          if (myProfile) setCurrentUser(prev => ({...prev, ...myProfile}));
+        }
 
-        // Load logbook
-        let lbQuery = supabase.from("logbook").select("*").order("activity_date", {ascending:false});
-        if (!isSupervisor) lbQuery = lbQuery.eq("resident_id", uid);
-        const { data: lbData } = await lbQuery;
+        // Load logbook - RLS otomatis filter berdasarkan user yang login
+        const { data: lbData } = await supabase
+          .from("logbook").select("*")
+          .order("activity_date", {ascending: false});
         if (lbData) setLogbookEntries(lbData.map(e => ({
           id: e.id,
           residentId: e.resident_id,  // UUID dari Supabase
@@ -959,10 +964,10 @@ export default function RheumUSU() {
           feedback: e.feedback
         })));
 
-        // Load patients
-        let ptQuery = supabase.from("patients").select("*").order("created_at", {ascending:false});
-        if (!isSupervisor) ptQuery = ptQuery.eq("resident_id", uid);
-        const { data: ptData } = await ptQuery;
+        // Load patients - RLS otomatis filter
+        const { data: ptData } = await supabase
+          .from("patients").select("*")
+          .order("created_at", {ascending: false});
         if (ptData) setPatients(ptData.map(p => ({
           id: p.id, residentId: p.resident_id, mrn: p.mrn,
           initials: p.initials, dob: p.dob, age: p.age, gender: p.gender,
@@ -984,15 +989,17 @@ export default function RheumUSU() {
           notes: p.notes, inputDate: p.input_date
         })));
 
-        // Load attendance
-        let attQuery = supabase.from("attendance").select("*").order("date", {ascending:false});
-        if (!isSupervisor) attQuery = attQuery.eq("resident_id", uid);
-        const { data: attData } = await attQuery;
+        // Load attendance - RLS otomatis filter
+        const { data: attData } = await supabase
+          .from("attendance").select("*")
+          .order("date", {ascending: false});
         if (attData) setAttendance(attData.map(a => ({
-          id: a.id, residentId: a.resident_id, date: a.date,
+          id: a.id,
+          residentId: a.resident_id,
+          date: a.date,
           checkIn: a.check_in ? a.check_in.substring(0,5) : null,
           checkOut: a.check_out ? a.check_out.substring(0,5) : null,
-          status: a.status, location: a.notes
+          status: a.status
         })));
 
       } catch(err) {
@@ -1215,43 +1222,22 @@ export default function RheumUSU() {
   const checkIn = async () => {
     const today = new Date().toISOString().split("T")[0];
     const uid = currentUser.id || currentUser.sub;
-    if (attendance.find(a => a.residentId === uid && a.date === today)) {
+    if (attendance.find(a => isMyEntry(a.residentId) && a.date === today)) {
       alert("Anda sudah check-in hari ini."); return;
     }
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-
-    const saveCheckIn = async (locationStr, mapsUrl) => {
-      if (supabase) {
-        await supabase.from("attendance").insert({
-          resident_id: uid, date: today,
-          check_in: timeStr + ":00", status: "present",
-          notes: locationStr || null
-        }).catch(e => console.error("Attendance save:", e.message));
-      }
-      setAttendance(prev => [...prev, {
-        id: Date.now(), residentId: uid, date: today,
-        checkIn: timeStr, checkOut: null, status: "present",
-        location: locationStr, mapsUrl: mapsUrl || null
-      }]);
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const { latitude, longitude, accuracy } = pos.coords;
-          const mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
-          await saveCheckIn(`${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m)`, mapsUrl);
-        },
-        async (err) => {
-          console.warn("GPS:", err.message);
-          await saveCheckIn("Lokasi tidak tersedia", null);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    } else {
-      await saveCheckIn("GPS tidak didukung", null);
+    if (supabase) {
+      const { error } = await supabase.from("attendance").insert({
+        resident_id: uid, date: today,
+        check_in: timeStr + ":00", status: "present"
+      });
+      if (error) console.error("CheckIn error:", error.message);
     }
+    setAttendance(prev => [...prev, {
+      id: Date.now(), residentId: uid, date: today,
+      checkIn: timeStr, checkOut: null, status: "present"
+    }]);
   };
   const checkOut = async () => {
     const today = new Date().toISOString().split("T")[0];
@@ -1487,7 +1473,7 @@ export default function RheumUSU() {
                             :todayAtt.location}
                         </div>}
                       </div>
-                    ):(<button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144",padding:"12px 24px",fontSize:14}}>📍 Check-In + Lokasi</button>);})()}
+                    ):(<button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144",padding:"12px 24px",fontSize:14}}>✅ Check-In</button>);})()}
                 </div>
               </>
             )}
@@ -1612,7 +1598,7 @@ export default function RheumUSU() {
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
               <h2 style={{color:"#f1f5f9",margin:0}}>Absensi</h2>
               {currentUser.role==="resident"&&<div style={{display:"flex",gap:8}}>
-                <button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144"}}>📍 Check-In + Lokasi</button>
+                <button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144"}}>✅ Check-In</button>
                 <button onClick={checkOut} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444"}}>🚪 Check-Out</button>
               </div>}
             </div>
@@ -1625,13 +1611,7 @@ export default function RheumUSU() {
                       {currentUser.role==="supervisor"&&<div style={{color:"#94a3b8",fontSize:13}}>{res?.name}</div>}
                       <span style={S.badge("#10b981")}>Hadir</span>
                     </div>
-                    {a.location&&(
-                      <div style={{fontSize:12,color:"#64748b",marginTop:2}}>
-                        📍 {a.mapsUrl
-                          ?<a href={a.mapsUrl} target="_blank" rel="noreferrer" style={{color:"#3b82f6",textDecoration:"none"}}>{a.location} ↗</a>
-                          :a.location}
-                      </div>
-                    )}
+
                   </div>
                   <div style={{display:"flex",gap:16,alignItems:"center"}}>
                     <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:10}}>CHECK-IN</div><div style={{color:"#10b981",fontWeight:700,fontSize:15}}>{a.checkIn}</div></div>
