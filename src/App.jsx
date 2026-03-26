@@ -1931,7 +1931,7 @@ export default function RheumUSU() {
                     <div>
                       <div style={{fontSize:28,marginBottom:6}}>📤</div>
                       <div style={{color:"#94a3b8",fontSize:13,fontWeight:600}}>Klik untuk pilih file</div>
-                      <div style={{color:"#64748b",fontSize:11,marginTop:3}}>PDF, PPT, PPTX, DOC, DOCX (maks. 10MB)</div>
+                      <div style={{color:"#64748b",fontSize:11,marginTop:3}}>PDF, PPT, PPTX, DOC, DOCX (maks. 30MB)</div>
                     </div>
                   )}
                 </div>
@@ -1940,7 +1940,7 @@ export default function RheumUSU() {
                   onChange={e=>{
                     const file = e.target.files[0];
                     if(!file) return;
-                    if(file.size > 10*1024*1024){ alert("File terlalu besar! Maksimal 10MB."); return; }
+                    if(file.size > 30*1024*1024){ alert("File terlalu besar! Maksimal 30MB."); return; }
                     const reader = new FileReader();
                     reader.onload = (ev) => {
                       setNewLogbook(p=>({...p, fileName:file.name, fileData:ev.target.result, fileType:file.type, fileUrl:"", uploadStatus:"" }));
