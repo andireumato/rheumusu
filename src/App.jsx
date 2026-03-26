@@ -1022,7 +1022,9 @@ export default function RheumUSU() {
           status: e.status,
           fileName: e.file_name,
           fileUrl: e.file_url,
-          feedback: e.feedback
+          feedback: e.feedback,
+          approvedAt: e.approved_at,
+          approvedBy: e.approved_by
         })));
 
         // Load patients
@@ -1074,6 +1076,37 @@ export default function RheumUSU() {
     loadAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.sub]);
+
+  // ── Realtime: subscribe perubahan status logbook ─────────────────
+  useEffect(() => {
+    if (!currentUser || !supabase) return;
+    const uid = currentUser.id || currentUser.sub;
+
+    const channel = supabase
+      .channel("logbook-changes")
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "logbook"
+      }, (payload) => {
+        // Update status logbook di state tanpa reload penuh
+        if (payload.new) {
+          setLogbookEntries(prev => prev.map(e =>
+            e.id === payload.new.id
+              ? {
+                  ...e,
+                  status: payload.new.status,
+                  feedback: payload.new.feedback,
+                }
+              : e
+          ));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
 
   const register = async () => {
     const { fullName, nim, phone, email, password, confirmPassword } = regForm;
@@ -1360,14 +1393,25 @@ export default function RheumUSU() {
     setShowPatientModal(false);
   };
   const approveLogbook = async (id) => {
+    // Update state dulu agar UI langsung berubah
+    setLogbookEntries(prev => prev.map(e => e.id===id ? {
+      ...e, status:"approved",
+      approvedAt: new Date().toISOString()
+    } : e));
+    // Kemudian update ke Supabase
     if (supabase) {
-      await supabase.from("logbook").update({
+      const { error } = await supabase.from("logbook").update({
         status: "approved",
         approved_by: currentUser.id || currentUser.sub,
         approved_at: new Date().toISOString()
       }).eq("id", id);
+      if (error) {
+        console.error("Approve error:", error.message);
+        // Rollback jika gagal
+        setLogbookEntries(prev => prev.map(e => e.id===id ? {...e, status:"pending"} : e));
+        alert("Gagal approve: " + error.message);
+      }
     }
-    setLogbookEntries(prev => prev.map(e => e.id===id ? {...e, status:"approved"} : e));
   };
   const checkIn = async () => {
     const today = new Date().toISOString().split("T")[0];
@@ -1732,7 +1776,22 @@ export default function RheumUSU() {
         {activeTab==="logbook"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
               <h2 style={{color:"#f1f5f9",margin:0}}>Logbook Kegiatan</h2>
+              <button onClick={async()=>{
+                if(!supabase) return;
+                const {data} = await supabase.from("logbook").select("*").order("activity_date",{ascending:false});
+                if(data) setLogbookEntries(data.map(e=>({
+                  id:e.id, residentId:e.resident_id, date:e.activity_date,
+                  type:e.activity_type, patientName:e.patient_name,
+                  diagnosis:e.diagnosis, topic:e.topic, notes:e.notes,
+                  status:e.status, fileName:e.file_name, fileUrl:e.file_url,
+                  feedback:e.feedback
+                })));
+              }} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#64748b",padding:"4px 10px",cursor:"pointer",fontSize:11}}>
+                🔄 Refresh
+              </button>
+            </div>
               {currentUser.role==="resident"&&<button onClick={()=>setShowLogbookModal(true)} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>+ Tambah</button>}
             </div>
             {myLogbook.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{const act=ACTIVITY_TYPES.find(a=>a.id===e.type);const res=findResident(e.residentId);return(
@@ -1768,6 +1827,9 @@ export default function RheumUSU() {
               </div>
             );})}
             {myLogbook.length===0&&<div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>Belum ada kegiatan.</div>}
+            <div style={{textAlign:"center",fontSize:10,color:"#334155",marginTop:8}}>
+              🔄 Status logbook sync otomatis • Tekan Refresh jika perlu
+            </div>
           </div>
         )}
 
