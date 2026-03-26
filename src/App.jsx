@@ -1147,48 +1147,45 @@ export default function RheumUSU() {
     }
     setLogbookEntries(prev => prev.map(e => e.id===id ? {...e, status:"approved"} : e));
   };
-  const checkIn = () => {
+  const checkIn = async () => {
     const today = new Date().toISOString().split("T")[0];
-    if (attendance.find(a => a.residentId === (currentUser.id || currentUser.sub) && a.date === today)) {
-      alert("Anda sudah check-in hari ini.");
-      return;
+    const uid = currentUser.id || currentUser.sub;
+    if (attendance.find(a => a.residentId === uid && a.date === today)) {
+      alert("Anda sudah check-in hari ini."); return;
     }
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+
+    const saveCheckIn = async (locationStr, mapsUrl) => {
+      if (supabase) {
+        await supabase.from("attendance").insert({
+          resident_id: uid, date: today,
+          check_in: timeStr + ":00", status: "present",
+          notes: locationStr || null
+        }).catch(e => console.error("Attendance save:", e.message));
+      }
+      setAttendance(prev => [...prev, {
+        id: Date.now(), residentId: uid, date: today,
+        checkIn: timeStr, checkOut: null, status: "present",
+        location: locationStr, mapsUrl: mapsUrl || null
+      }]);
+    };
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const { latitude, longitude, accuracy } = pos.coords;
           const mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
-          const locationStr = `${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m)`;
-          setAttendance(prev => [...prev, {
-            id: Date.now(), residentId: currentUser.id || currentUser.sub, date: today,
-            checkIn: timeStr, checkOut: null, status: "present",
-            location: locationStr, mapsUrl
-          }]);
+          await saveCheckIn(`${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m)`, mapsUrl);
         },
-        (err) => {
-          // GPS gagal/ditolak — tetap check-in tanpa lokasi
-          setAttendance(prev => [...prev, {
-            id: Date.now(), residentId: currentUser.id || currentUser.sub, date: today,
-            checkIn: timeStr, checkOut: null, status: "present",
-            location: "Lokasi tidak tersedia", mapsUrl: null
-          }]);
-          console.warn("GPS error:", err.message);
+        async (err) => {
+          console.warn("GPS:", err.message);
+          await saveCheckIn("Lokasi tidak tersedia", null);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      const newAtt = {
-        id: Date.now(), residentId: currentUser.id || currentUser.sub, date: today,
-        checkIn: timeStr, checkOut: null, status: "present",
-        location: "GPS tidak didukung"
-      };
-      if (supabase) await supabase.from("attendance").insert({
-        resident_id: newAtt.residentId, date: today,
-        check_in: timeStr + ":00", status: "present"
-      });
-      setAttendance(prev => [...prev, newAtt]);
+      await saveCheckIn("GPS tidak didukung", null);
     }
   };
   const checkOut = async () => {
