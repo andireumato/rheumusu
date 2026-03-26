@@ -582,8 +582,25 @@ function PatientForm({ onClose, onSave }) {
         <div style={G2}><FI k="mrn" l="No. Rekam Medis *" ph="XXXXX"/><FI k="initials" l="Inisial Pasien *" ph="Ny. SR / Tn. AB"/></div>
         <div style={G2}>
           <div><label style={LB}>Tanggal Lahir</label>
-            <input type="date" defaultValue={get("dob")} onChange={e=>{set("dob",e.target.value);if(e.target.value)set("age",Math.floor((new Date()-new Date(e.target.value))/(365.25*24*3600*1000)));}} style={IS}/></div>
-          <FI k="age" l="Usia (tahun) *" type="number" ph="45"/>
+            <input type="date" defaultValue={get("dob")} onChange={e=>{
+              set("dob",e.target.value);
+              if(e.target.value){
+                const age=Math.floor((new Date()-new Date(e.target.value))/(365.25*24*3600*1000));
+                set("age",age);
+                // Update usia display tanpa re-render penuh
+                const ageEl=document.getElementById("usia-display");
+                if(ageEl) ageEl.textContent=age+" tahun";
+                const ageInput=document.getElementById("usia-input");
+                if(ageInput) ageInput.value=age;
+              }
+            }} style={IS}/></div>
+          <div>
+            <label style={LB}>Usia (tahun) *</label>
+            <input id="usia-input" type="number" defaultValue={get("age")} onChange={e=>set("age",e.target.value)} placeholder="Otomatis dari tgl lahir" style={IS}/>
+            {get("dob")&&<div id="usia-display" style={{fontSize:11,color:"#10b981",marginTop:-8,marginBottom:8}}>
+              {get("age")} tahun
+            </div>}
+          </div>
         </div>
         <div style={G2}>
           <div><label style={LB}>Jenis Kelamin *</label>
@@ -1282,6 +1299,68 @@ export default function RheumUSU() {
         ? {...a, checkOut: timeStr} : a
     ));
   };
+  // ── Export Pasien DB ke Excel ──────────────────────────────────────
+  const exportPatientsExcel = () => {
+    if (patients.length === 0) { alert("Tidak ada data pasien untuk diekspor."); return; }
+
+    const headers = [
+      "No","No. RM","Inisial","Tgl Lahir","Usia","Gender","Agama","Suku","Status",
+      "Pendidikan","Pekerjaan","Alamat","Rujukan","Tgl Kunjungan","Jenis Kunjungan",
+      "BB (kg)","TB (cm)","BMI","Pinggang (cm)","Panggul (cm)","WHR",
+      "TD Sistol","TD Diastol","Nadi",
+      "Keluhan Utama","Onset","Tgl Dx Pertama","Tempat Dx","Diagnostic Delay",
+      "Diagnosis Utama","Diagnosis Sekunder","Aktivitas Penyakit",
+      "Terapi Saat Ini","Terapi Sebelumnya","Steroid","NSAID","Komorbiditas",
+      "Merokok","Alkohol",
+      "Hb","Leukosit","Trombosit","LED","CRP","Albumin","SGOT","SGPT",
+      "Ureum","Kreatinin","eGFR","Protein Urin",
+      "RF","Anti-CCP","ANA","Anti-dsDNA","Anti-Sm","Antifosfolipid","C3","C4","Asam Urat",
+      "Gula Darah","HbA1c","Kolesterol","LDL","HDL","Trigliserida",
+      "DAS28","SDAI","SLEDAI","BASDAI","VAS","Rontgen","USG","MRI","Biopsi",
+      "Catatan","Tgl Input"
+    ];
+
+    const rows = patients.map((p, i) => [
+      i+1, p.mrn||"", p.initials||"", p.dob||"", p.age||"", p.gender==="P"?"Perempuan":"Laki-laki",
+      p.religion||"", p.ethnicity||"", p.marital||"", p.education||"", p.occupation||"",
+      p.address||"", p.referralSource||"", p.visitDate||"", p.visitType||"",
+      p.weight||"", p.height||"", p.bmi||"", p.waist||"", p.hip||"", p.whr||"",
+      p.systolicBp||"", p.diastolicBp||"", p.heartRate||"",
+      p.chiefComplaint||"", p.onsetDate||"", p.firstDiagnosisDate||"",
+      p.firstDiagnosisPlace||"", p.diagnosisDelay||"",
+      p.diagnosis||"", p.diagnosisSecondary||"", p.diseaseActivity||"",
+      p.currentTherapy||"", p.previousTherapy||"", p.steroidUse||"", p.nsaidUse||"",
+      Array.isArray(p.comorbidities)?p.comorbidities.join("; "):p.comorbidities||"",
+      p.smoking||"", p.alcohol||"",
+      p.hb||"", p.wbc||"", p.plt||"", p.esr||"", p.crp||"", p.albumin||"",
+      p.sgot||"", p.sgpt||"", p.ureum||"", p.creatinine||"", p.gfr||"", p.urineProtein||"",
+      p.rf||"", p.antiCcp||"", p.ana||"", p.antidsDna||"", p.antiSm||"",
+      p.antiphospholipid||"", p.c3||"", p.c4||"", p.uricAcid||"",
+      p.glucose||"", p.hba1c||"", p.cholesterol||"", p.ldl||"", p.hdl||"", p.tg||"",
+      p.das28||"", p.sdai||"", p.sledai||"", p.basdai||"", p.vas||"",
+      p.xray||"", p.usg||"", p.mri||"", p.biopsyResult||"",
+      p.notes||"", p.inputDate||""
+    ]);
+
+    // Buat CSV (bisa dibuka Excel)
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => {
+        const str = String(cell).replace(/"/g, '""');
+        return str.includes(",") || str.includes('"') || str.includes("\n") ? `"${str}"` : str;
+      }).join(","))
+      .join("\n");
+
+    // Download dengan BOM agar Excel baca UTF-8 dengan benar
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `RheumUSU_Pasien_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const activityCounts = (resId) => {
     const entries = resId ? logbookEntries.filter(e=>e.residentId===resId) : myLogbook;
     return ACTIVITY_TYPES.map(a => ({...a, count: entries.filter(e=>e.type===a.id).length}));
@@ -1573,6 +1652,10 @@ export default function RheumUSU() {
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <div>
                 <h2 style={{color:"#f1f5f9",margin:0}}>Database Pasien Penelitian</h2>
+              {patients.length>0&&<button onClick={exportPatientsExcel}
+                style={{...S.btn("linear-gradient(135deg,#10b981,#06b6d4)"),fontSize:12,padding:"7px 14px",display:"flex",alignItems:"center",gap:6}}>
+                📊 Export Excel ({patients.length} pasien)
+              </button>}
                 <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{filteredPatients.length} pasien · {myPatients.length} total</div>
               </div>
               {currentUser.role==="resident"&&<button onClick={()=>setShowPatientModal(true)} style={S.btn("linear-gradient(135deg,#10b981,#06b6d4)")}>+ Tambah Pasien</button>}
