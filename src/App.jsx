@@ -935,9 +935,12 @@ export default function RheumUSU() {
 
     const loadAll = async () => {
       try {
+        console.log("Loading data for uid:", uid, "isSupervisor:", isSupervisor);
+
         // Load profiles/residents
-        const { data: profilesData } = await supabase
+        const { data: profilesData, error: profErr } = await supabase
           .from("profiles").select("*").order("full_name");
+        if (profErr) console.error("Profiles error:", profErr.message);
         if (profilesData) {
           setResidents(profilesData.filter(p => p.role === "resident"));
           // Update currentUser profile jika ada perubahan
@@ -945,13 +948,14 @@ export default function RheumUSU() {
           if (myProfile) setCurrentUser(prev => ({...prev, ...myProfile}));
         }
 
-        // Load logbook - RLS otomatis filter berdasarkan user yang login
-        const { data: lbData } = await supabase
+        // Load logbook
+        const { data: lbData, error: lbErr } = await supabase
           .from("logbook").select("*")
           .order("activity_date", {ascending: false});
+        console.log("Logbook loaded:", lbData?.length, "error:", lbErr?.message);
         if (lbData) setLogbookEntries(lbData.map(e => ({
           id: e.id,
-          residentId: e.resident_id,  // UUID dari Supabase
+          residentId: e.resident_id,
           date: e.activity_date,
           type: e.activity_type,
           patientName: e.patient_name,
@@ -964,10 +968,11 @@ export default function RheumUSU() {
           feedback: e.feedback
         })));
 
-        // Load patients - RLS otomatis filter
-        const { data: ptData } = await supabase
+        // Load patients
+        const { data: ptData, error: ptErr } = await supabase
           .from("patients").select("*")
           .order("created_at", {ascending: false});
+        console.log("Patients loaded:", ptData?.length, "error:", ptErr?.message);
         if (ptData) setPatients(ptData.map(p => ({
           id: p.id, residentId: p.resident_id, mrn: p.mrn,
           initials: p.initials, dob: p.dob, age: p.age, gender: p.gender,
@@ -989,10 +994,11 @@ export default function RheumUSU() {
           notes: p.notes, inputDate: p.input_date
         })));
 
-        // Load attendance - RLS otomatis filter
-        const { data: attData } = await supabase
+        // Load attendance
+        const { data: attData, error: attErr } = await supabase
           .from("attendance").select("*")
           .order("date", {ascending: false});
+        console.log("Attendance loaded:", attData?.length, "error:", attErr?.message);
         if (attData) setAttendance(attData.map(a => ({
           id: a.id,
           residentId: a.resident_id,
@@ -1110,7 +1116,7 @@ export default function RheumUSU() {
     }
     const uid = currentUser.id || currentUser.sub;
     if (supabase) {
-      const { data: saved, error } = await supabase.from("logbook").insert({
+      const insertData = {
         resident_id: uid,
         activity_type: newLogbook.type,
         activity_date: newLogbook.date,
@@ -1121,30 +1127,21 @@ export default function RheumUSU() {
         file_name: newLogbook.fileName || null,
         file_url: fileUrl || null,
         status: "pending"
-      }).select().single();
+      };
+      console.log("Inserting logbook:", insertData);
+      const { data: saved, error } = await supabase
+        .from("logbook").insert(insertData).select().single();
+      console.log("Logbook insert result:", saved, "error:", error?.message);
       if (!error && saved) {
-        // Tambahkan langsung ke state dengan residentId = UUID Supabase
-        const newEntry = {
-          id: saved.id,
-          residentId: saved.resident_id,
-          date: saved.activity_date,
-          type: saved.activity_type,
-          patientName: saved.patient_name,
-          diagnosis: saved.diagnosis,
-          topic: saved.topic,
-          notes: saved.notes,
-          status: saved.status,
-          fileName: saved.file_name,
-          fileUrl: saved.file_url
-        };
-        setLogbookEntries(prev => [newEntry, ...prev]);
-      } else {
-        console.error("Logbook save error:", error?.message);
-        // Tetap tampilkan di UI meski gagal simpan ke Supabase
         setLogbookEntries(prev => [{
-          ...newLogbook, id: Date.now(),
-          residentId: uid, status: "pending", fileUrl
+          id: saved.id, residentId: saved.resident_id,
+          date: saved.activity_date, type: saved.activity_type,
+          patientName: saved.patient_name, diagnosis: saved.diagnosis,
+          topic: saved.topic, notes: saved.notes, status: saved.status,
+          fileName: saved.file_name, fileUrl: saved.file_url
         }, ...prev]);
+      } else {
+        alert("Gagal simpan ke database: " + (error?.message || "unknown error"));
       }
     } else {
       setLogbookEntries(prev => [...prev, {
@@ -1228,11 +1225,20 @@ export default function RheumUSU() {
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     if (supabase) {
-      const { error } = await supabase.from("attendance").insert({
+      const { data: saved, error } = await supabase.from("attendance").insert({
         resident_id: uid, date: today,
         check_in: timeStr + ":00", status: "present"
-      });
-      if (error) console.error("CheckIn error:", error.message);
+      }).select().single();
+      console.log("CheckIn saved:", saved, "error:", error?.message);
+      if (!error && saved) {
+        setAttendance(prev => [...prev, {
+          id: saved.id, residentId: saved.resident_id,
+          date: saved.date, checkIn: timeStr, checkOut: null, status: "present"
+        }]);
+        return;
+      } else if (error?.code === "23505") {
+        alert("Anda sudah check-in hari ini."); return;
+      }
     }
     setAttendance(prev => [...prev, {
       id: Date.now(), residentId: uid, date: today,
