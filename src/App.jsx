@@ -19,16 +19,22 @@ const OCCUPATIONS = ["Petani / Nelayan","Buruh / Pekerja Kasar","Wiraswasta / Pe
 const MARITAL_STATUS = ["Belum Menikah","Menikah","Cerai Hidup","Cerai Mati / Janda / Duda"];
 const REFERRAL_SOURCES = ["Dokter Umum / Puskesmas","Dokter Spesialis Penyakit Dalam (Sp.PD)","Dokter Spesialis Lain","IGD RSUP Adam Malik","Datang Sendiri (Self-referral)","Rujukan RS Lain","Lainnya"];
 const COMORBIDITIES_LIST = ["Hipertensi","Diabetes Mellitus Tipe 2","Penyakit Ginjal Kronik (PGK)","Gagal Jantung","Penyakit Jantung Koroner","Stroke","Dislipidemia","Obesitas","Hiperurisemia","Anemia","Infeksi TB","Hepatitis B/C","Osteoporosis","Depresi / Anxietas","Tidak Ada"];
+// ================================================================
+// GOOGLE DRIVE INTEGRATION
+// Ganti dengan URL dari Google Apps Script deployment Anda
+// Panduan: lihat file GoogleAppsScript.js
+// ================================================================
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEM9_Pst7-oYQ2fPAzakap1qc7MquMTJ4lCn593peNJ2M4qAAJHybHqAQX-wkv3SFi0w/exec";
+
 const ACTIVITY_TYPES = [
-  { id:"outpatient",label:"Rawat Jalan",icon:"🏃",color:"#10b981",target:60 },
-  { id:"inpatient",label:"Rawat Inap",icon:"🛏️",color:"#3b82f6",target:20 },
-  { id:"cbd",label:"Case Based Discussion",icon:"💬",color:"#8b5cf6",target:4 },
-  { id:"journal",label:"Journal Reading",icon:"📖",color:"#f59e0b",target:4 },
-  { id:"assignment",label:"Reading Assignment",icon:"📝",color:"#ef4444",target:4 },
-  { id:"bst",label:"Bedside Teaching",icon:"🏥",color:"#06b6d4",target:8 },
+  { id:"outpatient",label:"Rawat Jalan",icon:"👥",color:"#10b981",target:30 },
+  { id:"inpatient",label:"Rawat Inap",icon:"🛏️",color:"#3b82f6",target:10 },
+  { id:"cbd",label:"Case Based Discussion",icon:"💬",color:"#8b5cf6",target:1 },
+  { id:"journal",label:"Journal Reading",icon:"📖",color:"#f59e0b",target:1 },
+  { id:"assignment",label:"Reading Assignment",icon:"📝",color:"#ef4444",target:1 },
+  { id:"bst",label:"Bedside Teaching",icon:"🏥",color:"#06b6d4",target:4 },
   { id:"minicex",label:"Mini-CEX",icon:"⚕️",color:"#ec4899",target:4 },
-  { id:"dops",label:"DOPS",icon:"🔬",color:"#f97316",target:2 },
-  { id:"referat",label:"Referat / Presentasi Kasus",icon:"🎤",color:"#84cc16",target:2 },
+  { id:"dops",label:"DOPS",icon:"🔬",color:"#f97316",target:5 },
 ];
 const RHEUM_MATERIALS = [
   { category:"🔍 Kriteria Diagnosis – Artritis", items:[
@@ -479,6 +485,23 @@ function SchoberCalc({ onClose }) {
   );
 }
 
+// ─ Google Drive Upload ─
+async function uploadToGoogleDrive({ residentName, residentNim, activityType, topic, fileName, fileData, fileType, date }) {
+  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("GANTI")) {
+    return { success: false, error: "Google Drive belum dikonfigurasi. Hubungi supervisor." };
+  }
+  try {
+    const res = await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ residentName, residentNim, activityType, topic, fileName, fileData, fileType, date })
+    });
+    return await res.json();
+  } catch (err) {
+    return { success: false, error: "Gagal terhubung ke Google Drive: " + err.message };
+  }
+}
+
 // ─ Patient Form ─
 const STEPS = ["👤 Identitas","📍 Rujukan","📏 Antropometri","🕐 Riwayat Penyakit","💊 Terapi & Komorbid","🔬 Laboratorium","📊 Skor & Pencitraan","📝 Catatan"];
 
@@ -798,7 +821,7 @@ export default function RheumUSU() {
   const [showMaterialDetail, setShowMaterialDetail] = useState(null);
   const [showCalculator, setShowCalculator] = useState(null);
   const [patientSearch, setPatientSearch] = useState("");
-  const [newLogbook, setNewLogbook] = useState({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"" });
+  const [newLogbook, setNewLogbook] = useState({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"", fileName:"", fileData:"", fileType:"" });
 
   const S = {
     app:{ minHeight:"100vh", background:"#0f172a", fontFamily:"'IBM Plex Sans','Segoe UI',sans-serif", color:"#f1f5f9" },
@@ -848,7 +871,40 @@ export default function RheumUSU() {
   const myPatients = currentUser?.role==="supervisor"?patients:patients.filter(p=>p.residentId===currentUser?.id);
   const myAttendance = currentUser?.role==="supervisor"?attendance:attendance.filter(a=>a.residentId===currentUser?.id);
   const filteredPatients = myPatients.filter(p=>{ const q=patientSearch.toLowerCase(); return !q||[p.mrn,p.initials,p.diagnosis,p.ethnicity,p.address,p.education,p.occupation].some(v=>v?.toString().toLowerCase().includes(q)); });
-  const addLogbook = () => { setLogbookEntries(prev=>[...prev,{...newLogbook,id:Date.now(),residentId:currentUser.id,status:"pending"}]); setShowLogbookModal(false); setNewLogbook({type:"outpatient",date:new Date().toISOString().split("T")[0],patientName:"",diagnosis:"",topic:"",notes:""}); };
+  const addLogbook = async () => {
+    let fileUrl = "";
+    let uploadMsg = "";
+    // Upload ke Google Drive jika ada file dan jenis kegiatan mendukung
+    if (newLogbook.fileData && ["cbd","journal","assignment"].includes(newLogbook.type)) {
+      const result = await uploadToGoogleDrive({
+        residentName: currentUser.name || currentUser.full_name,
+        residentNim: currentUser.nim || "unknown",
+        activityType: newLogbook.type,
+        topic: newLogbook.topic,
+        fileName: newLogbook.fileName,
+        fileData: newLogbook.fileData,
+        fileType: newLogbook.fileType,
+        date: newLogbook.date
+      });
+      if (result.success) {
+        fileUrl = result.fileUrl;
+        uploadMsg = "✅ File berhasil dikirim ke Google Drive!";
+      } else {
+        uploadMsg = "⚠️ File tersimpan lokal. Drive: " + result.error;
+      }
+    }
+    setLogbookEntries(prev => [...prev, {
+      ...newLogbook,
+      id: Date.now(),
+      residentId: currentUser.id,
+      status: "pending",
+      fileUrl,
+      uploadMsg
+    }]);
+    if (uploadMsg) alert(uploadMsg);
+    setShowLogbookModal(false);
+    setNewLogbook({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"", fileName:"", fileData:"", fileType:"" });
+  };
   const addPatient = (data) => { setPatients(prev=>[...prev,{...data,id:Date.now(),residentId:currentUser.id}]); setShowPatientModal(false); };
   const approveLogbook = (id) => setLogbookEntries(prev=>prev.map(e=>e.id===id?{...e,status:"approved"}:e));
   const checkIn = () => {
@@ -1137,9 +1193,27 @@ export default function RheumUSU() {
               <div key={e.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10}}>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{act?.icon}</span><span style={{fontWeight:700,color:act?.color}}>{act?.label}</span><span style={{color:"#64748b",fontSize:12}}>{e.date}</span>{currentUser.role==="supervisor"&&<span style={{color:"#94a3b8",fontSize:12}}>· {res?.name}</span>}</div>
-                  {e.patientName&&<div style={{color:"#94a3b8",fontSize:13}}>👤 {e.patientName} — {e.diagnosis}</div>}
+                  {e.patientName&&<div style={{color:"#94a3b8",fontSize:13}}>👥 {e.patientName} — {e.diagnosis}</div>}
                   {e.topic&&<div style={{color:"#94a3b8",fontSize:13}}>📌 {e.topic}</div>}
                   {e.notes&&<div style={{color:"#64748b",fontSize:12,marginTop:3}}>{e.notes}</div>}
+                  {e.fileName&&(
+                    <div style={{marginTop:5,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                      {e.fileUrl ? (
+                        <a href={e.fileUrl} target="_blank" rel="noreferrer"
+                          style={{display:"inline-flex",alignItems:"center",gap:6,background:"#10b98122",border:"1px solid #10b98144",borderRadius:8,padding:"4px 10px",color:"#10b981",fontSize:12,textDecoration:"none",fontWeight:600}}>
+                          📄 {e.fileName}
+                          <span style={{fontSize:10}}>↗ Lihat di Drive</span>
+                        </a>
+                      ) : (
+                        <a href={e.fileData} download={e.fileName}
+                          style={{display:"inline-flex",alignItems:"center",gap:6,background:"#1e3a5f",border:"1px solid #3b82f644",borderRadius:8,padding:"4px 10px",color:"#3b82f6",fontSize:12,textDecoration:"none",fontWeight:600}}>
+                          📄 {e.fileName}
+                          <span style={{fontSize:10,color:"#64748b"}}>↓ Unduh Lokal</span>
+                        </a>
+                      )}
+                      {e.fileUrl&&<span style={{fontSize:10,color:"#10b981"}}>✓ Tersimpan di Google Drive</span>}
+                    </div>
+                  )}
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
                   <span style={S.badge(e.status==="approved"?"#10b981":"#f59e0b")}>{e.status==="approved"?"✓ Approved":"⏳ Pending"}</span>
@@ -1267,7 +1341,52 @@ export default function RheumUSU() {
             <label style={S.label}>Tanggal</label>
             <input type="date" value={newLogbook.date} onChange={e=>setNewLogbook(p=>({...p,date:e.target.value}))} style={S.input}/>
             {["outpatient","inpatient"].includes(newLogbook.type)&&<><label style={S.label}>Nama Pasien</label><input value={newLogbook.patientName} onChange={e=>setNewLogbook(p=>({...p,patientName:e.target.value}))} placeholder="Inisial" style={S.input}/><label style={S.label}>Diagnosis</label><select value={newLogbook.diagnosis} onChange={e=>setNewLogbook(p=>({...p,diagnosis:e.target.value}))} style={S.input}><option value="">Pilih...</option>{DIAGNOSES.map(d=><option key={d}>{d}</option>)}</select></>}
-            {["cbd","journal","assignment","bst","minicex","dops","referat"].includes(newLogbook.type)&&<><label style={S.label}>Topik</label><input value={newLogbook.topic} onChange={e=>setNewLogbook(p=>({...p,topic:e.target.value}))} placeholder="Topik kegiatan" style={S.input}/></>}
+            {["cbd","journal","assignment","bst","minicex","dops"].includes(newLogbook.type)&&<><label style={S.label}>Topik / Judul</label><input value={newLogbook.topic} onChange={e=>setNewLogbook(p=>({...p,topic:e.target.value}))} placeholder="Judul/topik kegiatan" style={S.input}/></>}
+            {["cbd","journal","assignment"].includes(newLogbook.type)&&(
+              <div>
+                <label style={S.label}>Upload File Materi (PDF/PPT/DOC)</label>
+                <div style={{border:"2px dashed #334155",borderRadius:10,padding:16,textAlign:"center",marginBottom:12,background:"#0f172a",cursor:"pointer"}}
+                  onClick={()=>document.getElementById("fileUpload").click()}>
+                  {newLogbook.fileName?(
+                    <div>
+                      <div style={{fontSize:24,marginBottom:6}}>📄</div>
+                      <div style={{color:"#10b981",fontWeight:600,fontSize:13}}>{newLogbook.fileName}</div>
+                      <div style={{color:"#64748b",fontSize:11,marginTop:3}}>Klik untuk ganti file</div>
+                    </div>
+                  ):(
+                    <div>
+                      <div style={{fontSize:28,marginBottom:6}}>📤</div>
+                      <div style={{color:"#94a3b8",fontSize:13,fontWeight:600}}>Klik untuk pilih file</div>
+                      <div style={{color:"#64748b",fontSize:11,marginTop:3}}>PDF, PPT, PPTX, DOC, DOCX (maks. 10MB)</div>
+                    </div>
+                  )}
+                </div>
+                <input id="fileUpload" type="file" accept=".pdf,.ppt,.pptx,.doc,.docx"
+                  style={{display:"none"}}
+                  onChange={e=>{
+                    const file = e.target.files[0];
+                    if(!file) return;
+                    if(file.size > 10*1024*1024){ alert("File terlalu besar! Maksimal 10MB."); return; }
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setNewLogbook(p=>({...p, fileName:file.name, fileData:ev.target.result, fileType:file.type, fileUrl:"", uploadStatus:"" }));
+                    };
+                    reader.readAsDataURL(file);
+                  }}/>
+                {newLogbook.fileName&&(
+                  <div style={{display:"flex",justifyContent:"flex-end"}}>
+                    <button onClick={()=>setNewLogbook(p=>({...p,fileName:"",fileData:"",fileType:""}))}
+                      style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:8,color:"#ef4444",padding:"4px 10px",cursor:"pointer",fontSize:12}}>
+                      ✕ Hapus file
+                    </button>
+                  </div>
+                )}
+                <div style={{background:"#1e3a5f",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#64748b",marginBottom:4}}>
+                  📁 File akan otomatis dikirim ke <span style={{color:"#10b981",fontWeight:600}}>Google Drive divisi</span><br/>
+                  Struktur: <span style={{color:"#94a3b8"}}>NIM - Nama &gt; Jenis Kegiatan &gt; File</span>
+                </div>
+              </div>
+            )}
             <label style={S.label}>Catatan</label>
             <textarea value={newLogbook.notes} onChange={e=>setNewLogbook(p=>({...p,notes:e.target.value}))} rows={3} style={{...S.input,resize:"vertical"}}/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button onClick={()=>setShowLogbookModal(false)} style={{...S.btn("#334155"),color:"#94a3b8"}}>Batal</button><button onClick={addLogbook} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>Simpan</button></div>
