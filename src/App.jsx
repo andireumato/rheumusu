@@ -17,7 +17,7 @@ const ETHNICITIES = ["Batak Toba","Batak Karo","Batak Mandailing","Batak Simalun
 const EDUCATION_LEVELS = ["Tidak Sekolah","SD / Sederajat","SMP / Sederajat","SMA / Sederajat","Diploma (D1–D3)","Sarjana (S1)","Pascasarjana (S2/S3)"];
 const OCCUPATIONS = ["Petani / Nelayan","Buruh / Pekerja Kasar","Wiraswasta / Pedagang","Pegawai Swasta","Pegawai Negeri Sipil (PNS)","TNI / Polri","Tenaga Kesehatan","Guru / Dosen","Ibu Rumah Tangga","Pensiunan","Pelajar / Mahasiswa","Tidak Bekerja","Lainnya"];
 const MARITAL_STATUS = ["Belum Menikah","Menikah","Cerai Hidup","Cerai Mati / Janda / Duda"];
-const REFERRAL_SOURCES = ["Dokter Umum / Puskesmas","Dokter Spesialis Penyakit Dalam (Sp.PD)","Dokter Spesialis Lain","IGD RSUP H. Adam Malik","Datang Sendiri (Self-referral)","Rujukan RS Lain","Lainnya"];
+const REFERRAL_SOURCES = ["Dokter Umum / Puskesmas","Dokter Spesialis Penyakit Dalam (Sp.PD)","Dokter Spesialis Lain","IGD RSUP Adam Malik","Datang Sendiri (Self-referral)","Rujukan RS Lain","Lainnya"];
 const COMORBIDITIES_LIST = ["Hipertensi","Diabetes Mellitus Tipe 2","Penyakit Ginjal Kronik (PGK)","Gagal Jantung","Penyakit Jantung Koroner","Stroke","Dislipidemia","Obesitas","Hiperurisemia","Anemia","Infeksi TB","Hepatitis B/C","Osteoporosis","Depresi / Anxietas","Tidak Ada"];
 const ACTIVITY_TYPES = [
   { id:"outpatient",label:"Rawat Jalan",icon:"🏃",color:"#10b981",target:60 },
@@ -776,8 +776,8 @@ export default function RheumUSU() {
     { id:4,residentId:"res1",date:"2024-03-08",type:"inpatient",patientName:"Pasien B",diagnosis:"SLE dengan Lupus Nefritis",notes:"Pulse methylprednisolone",status:"pending" },
   ]);
   const [patients, setPatients] = useState([
-    { id:1,residentId:"res1",mrn:"RSH-2024-001",initials:"Ny. SR",dob:"1979-04-15",age:45,gender:"P",ethnicity:"Batak Toba",religion:"Kristen Protestan",marital:"Menikah",education:"SMA / Sederajat",occupation:"Ibu Rumah Tangga",address:"Kab. Toba",referralSource:"Dokter Spesialis Penyakit Dalam (Sp.PD)",visitDate:"2024-03-01",visitType:"Rawat Jalan (Kontrol)",weight:"62",height:"155",bmi:"25.8",waist:"82",hip:"96",whr:"0.85",systolicBp:"130",diastolicBp:"85",heartRate:"80",chiefComplaint:"Nyeri dan kaku sendi jari tangan bilateral, kaku pagi >1 jam",onsetDate:"2021-01-10",onsetDuration:"8",onsetDurationUnit:"bulan",firstDiagnosisDate:"2021-09-01",firstDiagnosisPlace:"RSUP H. Adam Malik Medan",diagnosisDelay:"8 bulan",diagnosis:"Rheumatoid Arthritis (RA)",diseaseActivity:"Aktivitas Sedang",currentTherapy:"MTX 15mg/minggu + HCQ 400mg/hari + Asam folat 1mg/hari",previousTherapy:"MTX 7.5mg + prednison",steroidUse:"Ya – dosis rendah (<7.5mg/hari)",nsaidUse:"Sesekali (PRN)",comorbidities:["Hipertensi","Dislipidemia"],familyHistory:"Ya",familyHistoryDetail:"Ibu kandung",smoking:"Tidak Pernah",alcohol:"Tidak",hb:"10.8",wbc:"9.2",plt:"320",esr:"68",crp:"24",albumin:"3.8",creatinine:"0.8",rf:"Positif (256 IU/mL)",antiCcp:"Positif (>200 U/mL)",das28:"4.8",vas:"6",inputDate:"2024-03-01" },
-    { id:2,residentId:"res2",mrn:"RSH-2024-002",initials:"Ny. DL",dob:"1996-07-22",age:27,gender:"P",ethnicity:"Melayu",religion:"Islam",marital:"Menikah",education:"Sarjana (S1)",occupation:"Guru / Dosen",address:"Kota Medan",referralSource:"Dokter Umum / Puskesmas",visitDate:"2024-03-05",visitType:"Rawat Inap",weight:"50",height:"158",bmi:"20.0",waist:"70",hip:"88",whr:"0.80",systolicBp:"110",diastolicBp:"70",heartRate:"90",chiefComplaint:"Ruam malar, artritis, kelelahan, edema tungkai",onsetDate:"2023-02-01",onsetDuration:"4",onsetDurationUnit:"bulan",firstDiagnosisDate:"2023-06-15",firstDiagnosisPlace:"RSUP H. Adam Malik Medan",diagnosisDelay:"4 bulan",diagnosis:"Systemic Lupus Erythematosus (SLE)",diagnosisSecondary:"Lupus Nefritis kelas IV",diseaseActivity:"Aktivitas Tinggi",currentTherapy:"Prednison 40mg/hari + MMF 2g/hari + HCQ 400mg/hari",steroidUse:"Ya – dosis tinggi (>30mg)",nsaidUse:"Tidak",comorbidities:["Tidak Ada"],familyHistory:"Tidak",smoking:"Tidak Pernah",alcohol:"Tidak",hb:"8.2",wbc:"3.1",plt:"89",esr:"95",crp:"18",albumin:"2.9",creatinine:"1.6",gfr:"48",urineProtein:"+3",ana:"1:640 homogen",antidsDna:"Positif (>200 IU/mL)",antiSm:"Positif",c3:"45",c4:"8",sledai:"18",vas:"7",inputDate:"2024-03-05" },
+    { id:1,residentId:"res1",mrn:"RSH-2024-001",initials:"Ny. SR",dob:"1979-04-15",age:45,gender:"P",ethnicity:"Batak Toba",religion:"Kristen Protestan",marital:"Menikah",education:"SMA / Sederajat",occupation:"Ibu Rumah Tangga",address:"Kab. Toba",referralSource:"Dokter Spesialis Penyakit Dalam (Sp.PD)",visitDate:"2024-03-01",visitType:"Rawat Jalan (Kontrol)",weight:"62",height:"155",bmi:"25.8",waist:"82",hip:"96",whr:"0.85",systolicBp:"130",diastolicBp:"85",heartRate:"80",chiefComplaint:"Nyeri dan kaku sendi jari tangan bilateral, kaku pagi >1 jam",onsetDate:"2021-01-10",onsetDuration:"8",onsetDurationUnit:"bulan",firstDiagnosisDate:"2021-09-01",firstDiagnosisPlace:"RSUP Adam Malik Medan",diagnosisDelay:"8 bulan",diagnosis:"Rheumatoid Arthritis (RA)",diseaseActivity:"Aktivitas Sedang",currentTherapy:"MTX 15mg/minggu + HCQ 400mg/hari + Asam folat 1mg/hari",previousTherapy:"MTX 7.5mg + prednison",steroidUse:"Ya – dosis rendah (<7.5mg/hari)",nsaidUse:"Sesekali (PRN)",comorbidities:["Hipertensi","Dislipidemia"],familyHistory:"Ya",familyHistoryDetail:"Ibu kandung",smoking:"Tidak Pernah",alcohol:"Tidak",hb:"10.8",wbc:"9.2",plt:"320",esr:"68",crp:"24",albumin:"3.8",creatinine:"0.8",rf:"Positif (256 IU/mL)",antiCcp:"Positif (>200 U/mL)",das28:"4.8",vas:"6",inputDate:"2024-03-01" },
+    { id:2,residentId:"res2",mrn:"RSH-2024-002",initials:"Ny. DL",dob:"1996-07-22",age:27,gender:"P",ethnicity:"Melayu",religion:"Islam",marital:"Menikah",education:"Sarjana (S1)",occupation:"Guru / Dosen",address:"Kota Medan",referralSource:"Dokter Umum / Puskesmas",visitDate:"2024-03-05",visitType:"Rawat Inap",weight:"50",height:"158",bmi:"20.0",waist:"70",hip:"88",whr:"0.80",systolicBp:"110",diastolicBp:"70",heartRate:"90",chiefComplaint:"Ruam malar, artritis, kelelahan, edema tungkai",onsetDate:"2023-02-01",onsetDuration:"4",onsetDurationUnit:"bulan",firstDiagnosisDate:"2023-06-15",firstDiagnosisPlace:"RSUP Adam Malik Medan",diagnosisDelay:"4 bulan",diagnosis:"Systemic Lupus Erythematosus (SLE)",diagnosisSecondary:"Lupus Nefritis kelas IV",diseaseActivity:"Aktivitas Tinggi",currentTherapy:"Prednison 40mg/hari + MMF 2g/hari + HCQ 400mg/hari",steroidUse:"Ya – dosis tinggi (>30mg)",nsaidUse:"Tidak",comorbidities:["Tidak Ada"],familyHistory:"Tidak",smoking:"Tidak Pernah",alcohol:"Tidak",hb:"8.2",wbc:"3.1",plt:"89",esr:"95",crp:"18",albumin:"2.9",creatinine:"1.6",gfr:"48",urineProtein:"+3",ana:"1:640 homogen",antidsDna:"Positif (>200 IU/mL)",antiSm:"Positif",c3:"45",c4:"8",sledai:"18",vas:"7",inputDate:"2024-03-05" },
   ]);
   const [attendance, setAttendance] = useState([
     { id:1,residentId:"res1",date:"2024-03-01",checkIn:"07:15",checkOut:"15:30",status:"present" },
@@ -815,7 +815,45 @@ export default function RheumUSU() {
   const addLogbook = () => { setLogbookEntries(prev=>[...prev,{...newLogbook,id:Date.now(),residentId:currentUser.id,status:"pending"}]); setShowLogbookModal(false); setNewLogbook({type:"outpatient",date:new Date().toISOString().split("T")[0],patientName:"",diagnosis:"",topic:"",notes:""}); };
   const addPatient = (data) => { setPatients(prev=>[...prev,{...data,id:Date.now(),residentId:currentUser.id}]); setShowPatientModal(false); };
   const approveLogbook = (id) => setLogbookEntries(prev=>prev.map(e=>e.id===id?{...e,status:"approved"}:e));
-  const checkIn = () => { const today=new Date().toISOString().split("T")[0]; if(!attendance.find(a=>a.residentId===currentUser.id&&a.date===today)){const now=new Date();setAttendance(prev=>[...prev,{id:Date.now(),residentId:currentUser.id,date:today,checkIn:`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`,checkOut:null,status:"present"}]);} };
+  const checkIn = () => {
+    const today = new Date().toISOString().split("T")[0];
+    if (attendance.find(a => a.residentId === currentUser.id && a.date === today)) {
+      alert("Anda sudah check-in hari ini.");
+      return;
+    }
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          const mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
+          const locationStr = `${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m)`;
+          setAttendance(prev => [...prev, {
+            id: Date.now(), residentId: currentUser.id, date: today,
+            checkIn: timeStr, checkOut: null, status: "present",
+            location: locationStr, mapsUrl
+          }]);
+        },
+        (err) => {
+          // GPS gagal/ditolak — tetap check-in tanpa lokasi
+          setAttendance(prev => [...prev, {
+            id: Date.now(), residentId: currentUser.id, date: today,
+            checkIn: timeStr, checkOut: null, status: "present",
+            location: "Lokasi tidak tersedia", mapsUrl: null
+          }]);
+          console.warn("GPS error:", err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      setAttendance(prev => [...prev, {
+        id: Date.now(), residentId: currentUser.id, date: today,
+        checkIn: timeStr, checkOut: null, status: "present",
+        location: "GPS tidak didukung", mapsUrl: null
+      }]);
+    }
+  };
   const checkOut = () => { const today=new Date().toISOString().split("T")[0]; const now=new Date(); setAttendance(prev=>prev.map(a=>a.residentId===currentUser.id&&a.date===today?{...a,checkOut:`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`}:a)); };
   const activityCounts = (resId) => { const entries=resId?logbookEntries.filter(e=>e.residentId===resId):myLogbook; return ACTIVITY_TYPES.map(a=>({...a,count:entries.filter(e=>e.type===a.id).length})); };
 
@@ -828,7 +866,7 @@ export default function RheumUSU() {
             <div>
               <h1 style={{fontSize:30,fontWeight:900,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:0,lineHeight:1}}>RheumUSU</h1>
               <p style={{color:"#64748b",margin:"6px 0 0",fontSize:12}}>Divisi Reumatologi</p>
-              <p style={{color:"#475569",margin:"2px 0 0",fontSize:11}}>FK-USU / RSUP H. Adam Malik</p>
+              <p style={{color:"#475569",margin:"2px 0 0",fontSize:11}}>FK-USU / RSUP Adam Malik</p>
             </div>
             <img src={LOGO_IRA} alt="IRA" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
           </div>
@@ -859,12 +897,12 @@ export default function RheumUSU() {
       <div style={{background:"#1e293b",borderBottom:"1px solid #334155",padding:"0 20px"}}>
         <div style={{maxWidth:1200,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:60}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <img src={LOGO_IRA} alt="IRA" style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",border:"1px solid #334155",background:"white"}}/>
-            <img src={LOGO_USU} alt="USU" style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",border:"1px solid #334155",background:"white"}}/>
-            <div style={{marginLeft:4}}>
+            <img src={LOGO_USU} alt="USU" style={{width:36,height:36,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
+            <div style={{marginLeft:2,marginRight:2}}>
               <div style={{fontWeight:900,fontSize:17,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>RheumUSU</div>
-              <div style={{color:"#64748b",fontSize:10}}>PPDS Reumatologi · FK-USU</div>
+              <div style={{color:"#64748b",fontSize:10}}>PPDS Reumatologi · FK-USU / RSUP Adam Malik</div>
             </div>
+            <img src={LOGO_IRA} alt="IRA" style={{width:36,height:36,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{textAlign:"right"}}><div style={{color:"#f1f5f9",fontWeight:600,fontSize:14}}>{currentUser.name}</div><div style={{color:"#64748b",fontSize:11}}>{currentUser.role==="supervisor"?"Supervisor / Sp.PD-KR":`NIM: ${currentUser.nim}`}</div></div>
@@ -907,7 +945,19 @@ export default function RheumUSU() {
                 </div>
                 <div style={S.card}>
                   <div style={{fontWeight:700,marginBottom:10,color:"#94a3b8",fontSize:12,textTransform:"uppercase"}}>Absensi Hari Ini</div>
-                  {(()=>{const today=new Date().toISOString().split("T")[0];const todayAtt=attendance.find(a=>a.residentId===currentUser.id&&a.date===today);return todayAtt?(<div style={{display:"flex",gap:20,alignItems:"center"}}><div><div style={{color:"#10b981",fontWeight:700,fontSize:12}}>CHECK-IN</div><div style={{color:"#f1f5f9",fontSize:20,fontWeight:900}}>{todayAtt.checkIn}</div></div>{todayAtt.checkOut?<div><div style={{color:"#ef4444",fontWeight:700,fontSize:12}}>CHECK-OUT</div><div style={{color:"#f1f5f9",fontSize:20,fontWeight:900}}>{todayAtt.checkOut}</div></div>:<button onClick={checkOut} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444"}}>🚪 Check-Out</button>}</div>):(<button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144",padding:"12px 24px",fontSize:14}}>✅ Check-In Sekarang</button>);})()}
+                  {(()=>{const today=new Date().toISOString().split("T")[0];const todayAtt=attendance.find(a=>a.residentId===currentUser.id&&a.date===today);return todayAtt?(
+                      <div>
+                        <div style={{display:"flex",gap:20,alignItems:"center",marginBottom:8}}>
+                          <div><div style={{color:"#10b981",fontWeight:700,fontSize:12}}>CHECK-IN</div><div style={{color:"#f1f5f9",fontSize:20,fontWeight:900}}>{todayAtt.checkIn}</div></div>
+                          {todayAtt.checkOut?<div><div style={{color:"#ef4444",fontWeight:700,fontSize:12}}>CHECK-OUT</div><div style={{color:"#f1f5f9",fontSize:20,fontWeight:900}}>{todayAtt.checkOut}</div></div>:<button onClick={checkOut} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444"}}>🚪 Check-Out</button>}
+                        </div>
+                        {todayAtt.location&&<div style={{fontSize:12,color:"#64748b"}}>
+                          📍 {todayAtt.mapsUrl
+                            ?<a href={todayAtt.mapsUrl} target="_blank" rel="noreferrer" style={{color:"#3b82f6",textDecoration:"none"}}>{todayAtt.location}</a>
+                            :todayAtt.location}
+                        </div>}
+                      </div>
+                    ):(<button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144",padding:"12px 24px",fontSize:14}}>📍 Check-In + Lokasi</button>);})()}
                 </div>
               </>
             )}
@@ -1013,15 +1063,32 @@ export default function RheumUSU() {
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
               <h2 style={{color:"#f1f5f9",margin:0}}>Absensi</h2>
-              {currentUser.role==="resident"&&<div style={{display:"flex",gap:8}}><button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144"}}>✅ Check-In</button><button onClick={checkOut} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444"}}>🚪 Check-Out</button></div>}
+              {currentUser.role==="resident"&&<div style={{display:"flex",gap:8}}>
+                <button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144"}}>📍 Check-In + Lokasi</button>
+                <button onClick={checkOut} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444"}}>🚪 Check-Out</button>
+              </div>}
             </div>
             {myAttendance.sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{const res=USERS.residents.find(r=>r.id===a.residentId);return(
-              <div key={a.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 18px",marginBottom:8}}>
-                <div style={{display:"flex",gap:14,alignItems:"center"}}><div style={{fontWeight:700,color:"#f1f5f9"}}>{a.date}</div>{currentUser.role==="supervisor"&&<div style={{color:"#94a3b8",fontSize:13}}>{res?.name}</div>}</div>
-                <div style={{display:"flex",gap:16,alignItems:"center"}}>
-                  <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:10}}>CHECK-IN</div><div style={{color:"#10b981",fontWeight:700}}>{a.checkIn}</div></div>
-                  {a.checkOut&&<div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:10}}>CHECK-OUT</div><div style={{color:"#ef4444",fontWeight:700}}>{a.checkOut}</div></div>}
-                  <span style={S.badge("#10b981")}>Hadir</span>
+              <div key={a.id} style={{...S.card,padding:"14px 18px",marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:4}}>
+                      <div style={{fontWeight:700,color:"#f1f5f9"}}>{a.date}</div>
+                      {currentUser.role==="supervisor"&&<div style={{color:"#94a3b8",fontSize:13}}>{res?.name}</div>}
+                      <span style={S.badge("#10b981")}>Hadir</span>
+                    </div>
+                    {a.location&&(
+                      <div style={{fontSize:12,color:"#64748b",marginTop:2}}>
+                        📍 {a.mapsUrl
+                          ?<a href={a.mapsUrl} target="_blank" rel="noreferrer" style={{color:"#3b82f6",textDecoration:"none"}}>{a.location} ↗</a>
+                          :a.location}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{display:"flex",gap:16,alignItems:"center"}}>
+                    <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:10}}>CHECK-IN</div><div style={{color:"#10b981",fontWeight:700,fontSize:15}}>{a.checkIn}</div></div>
+                    {a.checkOut&&<div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:10}}>CHECK-OUT</div><div style={{color:"#ef4444",fontWeight:700,fontSize:15}}>{a.checkOut}</div></div>}
+                  </div>
                 </div>
               </div>
             );})}
