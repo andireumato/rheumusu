@@ -1673,7 +1673,7 @@ export default function RheumUSU() {
                 {allResidents.map(r=>{const counts=activityCounts(r.id);const total=counts.reduce((s,a)=>s+a.count,0);const totalTarget=counts.reduce((s,a)=>s+a.target,0);const pct=Math.round((total/totalTarget)*100);return(
                   <div key={r.id} style={{...S.card,marginBottom:12}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div><div style={{fontWeight:700,color:"#f1f5f9"}}>{r.name}</div><div style={{color:"#64748b",fontSize:12}}>Angkatan {r.batch} · NIM {r.nim}</div></div>
+                      <div><div style={{fontWeight:700,color:"#f1f5f9"}}>{r.full_name||r.name||r.email}</div><div style={{color:"#64748b",fontSize:12}}>{r.nim?`NIM ${r.nim}`:""}{r.batch?` · Angkatan ${r.batch}`:""}</div></div>
                       <div style={{textAlign:"right"}}><div style={{fontWeight:900,fontSize:20,color:"#3b82f6"}}>{pct}%</div><div style={{color:"#64748b",fontSize:12}}>{total}/{totalTarget}</div></div>
                     </div>
                     <div style={{background:"#0f172a",borderRadius:100,height:7,overflow:"hidden"}}><div style={{width:`${Math.min(pct,100)}%`,height:"100%",background:"linear-gradient(90deg,#3b82f6,#8b5cf6)",borderRadius:100}}/></div>
