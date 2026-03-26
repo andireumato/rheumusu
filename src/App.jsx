@@ -819,7 +819,7 @@ function PatientDetail({ patient, onClose, onEdit }) {
       <div style={{background:"#1e293b",borderRadius:20,width:"100%",maxWidth:680,maxHeight:"92vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
         <div style={{padding:"18px 22px",borderBottom:"1px solid #334155"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:patient.lastUpdatedAt?10:0}}>
-            <div><h3 style={{color:"#f1f5f9",margin:0}}>{patient.initials||patient.mrn}</h3><div style={{color:"#64748b",fontSize:12}}>{patient.diagnosis} · Input: {res?.name}</div></div>
+            <div><h3 style={{color:"#f1f5f9",margin:0}}>{patient.initials||patient.mrn}</h3><div style={{color:"#64748b",fontSize:12}}>{patient.diagnosis} · Input: {res?.full_name||res?.name||"Residen"}</div></div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               {onEdit&&<button onClick={onEdit} style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:10,color:"white",padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5}}>✏️ Edit</button>}
               <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
@@ -1469,11 +1469,22 @@ export default function RheumUSU() {
   };
 
   const activityCounts = (resId) => {
-    const entries = resId ? logbookEntries.filter(e=>e.residentId===resId) : myLogbook;
+    const entries = resId
+      ? logbookEntries.filter(e => e.residentId === resId)
+      : myLogbook;
     return ACTIVITY_TYPES.map(a => ({...a, count: entries.filter(e=>e.type===a.id).length}));
   };
   // Gabungkan USERS.residents dengan data dari Supabase
   const allResidents = residents.length > 0 ? residents : USERS.residents;
+  // Helper: cari residen dari Supabase residents state (prioritas) atau USERS fallback
+  const findResident = (residentId) => {
+    if (!residentId) return null;
+    // Cari di Supabase residents (full_name dari profiles)
+    const fromSupabase = residents.find(r => r.id === residentId);
+    if (fromSupabase) return { ...fromSupabase, name: fromSupabase.full_name, nim: fromSupabase.nim };
+    // Fallback ke USERS demo
+    return USERS.residents.find(r => r.id === residentId) || null;
+  };
 
   if(!currentUser) return (
     <div style={{...S.app,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:16}}>
@@ -1655,11 +1666,11 @@ export default function RheumUSU() {
             {currentUser.role==="supervisor"?(
               <>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:24}}>
-                  {[["👥","Total Residen",USERS.residents.length,"#3b82f6"],["📋","Total Logbook",logbookEntries.length,"#8b5cf6"],["⏳","Menunggu Approval",logbookEntries.filter(e=>e.status==="pending").length,"#f59e0b"],["🗃️","Total Pasien DB",patients.length,"#10b981"]].map(([icon,label,val,color])=>(
+                  {[["👥","Total Residen",allResidents.length,"#3b82f6"],["📋","Total Logbook",logbookEntries.length,"#8b5cf6"],["⏳","Menunggu Approval",logbookEntries.filter(e=>e.status==="pending").length,"#f59e0b"],["🗃️","Total Pasien DB",patients.length,"#10b981"]].map(([icon,label,val,color])=>(
                     <div key={label} style={{...S.card,textAlign:"center",padding:16}}><div style={{fontSize:28}}>{icon}</div><div style={{fontSize:26,fontWeight:900,color}}>{val}</div><div style={{color:"#64748b",fontSize:12}}>{label}</div></div>
                   ))}
                 </div>
-                {USERS.residents.map(r=>{const counts=activityCounts(r.id);const total=counts.reduce((s,a)=>s+a.count,0);const totalTarget=counts.reduce((s,a)=>s+a.target,0);const pct=Math.round((total/totalTarget)*100);return(
+                {allResidents.map(r=>{const counts=activityCounts(r.id);const total=counts.reduce((s,a)=>s+a.count,0);const totalTarget=counts.reduce((s,a)=>s+a.target,0);const pct=Math.round((total/totalTarget)*100);return(
                   <div key={r.id} style={{...S.card,marginBottom:12}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                       <div><div style={{fontWeight:700,color:"#f1f5f9"}}>{r.name}</div><div style={{color:"#64748b",fontSize:12}}>Angkatan {r.batch} · NIM {r.nim}</div></div>
@@ -1698,10 +1709,10 @@ export default function RheumUSU() {
         {activeTab==="residents"&&currentUser.role==="supervisor"&&(
           <div>
             <h2 style={{color:"#f1f5f9",marginTop:0}}>Daftar Residen</h2>
-            {USERS.residents.map(r=>(
+            {allResidents.map(r=>(
               <div key={r.id} style={{...S.card,marginBottom:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                  <div><div style={{fontWeight:700,fontSize:15,color:"#f1f5f9"}}>{r.name}</div><div style={{color:"#64748b",fontSize:12}}>NIM: {r.nim} · Angkatan {r.batch} · {r.email}</div></div>
+                  <div><div style={{fontWeight:700,fontSize:15,color:"#f1f5f9"}}>{r.full_name||r.name}</div><div style={{color:"#64748b",fontSize:12}}>NIM: {r.nim||"-"}{r.batch?` · Angkatan ${r.batch}`:""}{r.email?` · ${r.email}`:""}</div></div>
                   <div style={{display:"flex",gap:8}}><span style={S.badge("#10b981")}>{logbookEntries.filter(e=>e.residentId===r.id&&e.status==="approved").length} Approved</span><span style={S.badge("#f59e0b")}>{logbookEntries.filter(e=>e.residentId===r.id&&e.status==="pending").length} Pending</span></div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
@@ -1718,10 +1729,10 @@ export default function RheumUSU() {
               <h2 style={{color:"#f1f5f9",margin:0}}>Logbook Kegiatan</h2>
               {currentUser.role==="resident"&&<button onClick={()=>setShowLogbookModal(true)} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>+ Tambah</button>}
             </div>
-            {myLogbook.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{const act=ACTIVITY_TYPES.find(a=>a.id===e.type);const res=USERS.residents.find(r=>r.id===e.residentId);return(
+            {myLogbook.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{const act=ACTIVITY_TYPES.find(a=>a.id===e.type);const res=findResident(e.residentId);return(
               <div key={e.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10}}>
                 <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{act?.icon}</span><span style={{fontWeight:700,color:act?.color}}>{act?.label}</span><span style={{color:"#64748b",fontSize:12}}>{e.date}</span>{currentUser.role==="supervisor"&&<span style={{color:"#94a3b8",fontSize:12}}>· {res?.name}</span>}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{act?.icon}</span><span style={{fontWeight:700,color:act?.color}}>{act?.label}</span><span style={{color:"#64748b",fontSize:12}}>{e.date}</span>{currentUser.role==="supervisor"&&<span style={{color:"#94a3b8",fontSize:12}}>· {res?.full_name||res?.name||"Residen"}</span>}</div>
                   {e.patientName&&<div style={{color:"#94a3b8",fontSize:13}}>👥 {e.patientName} — {e.diagnosis}</div>}
                   {e.topic&&<div style={{color:"#94a3b8",fontSize:13}}>📌 {e.topic}</div>}
                   {e.notes&&<div style={{color:"#64748b",fontSize:12,marginTop:3}}>{e.notes}</div>}
@@ -1770,7 +1781,7 @@ export default function RheumUSU() {
             <input value={patientSearch} onChange={e=>setPatientSearch(e.target.value)} placeholder="🔍 Cari No.RM, nama, diagnosis, suku, pendidikan, pekerjaan..." style={{...S.input,marginBottom:14}}/>
             <div style={{display:"grid",gap:12}}>
               {filteredPatients.map(p=>{
-                const res=USERS.residents.find(r=>r.id===p.residentId);
+                const res=findResident(p.residentId);
                 const bmiNum=parseFloat(p.bmi);
                 const bmiColor=bmiNum>=27.5?"#ef4444":bmiNum>=23?"#f59e0b":"#10b981";
                 return(
@@ -1789,7 +1800,7 @@ export default function RheumUSU() {
                       </div>
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                         {p.diseaseActivity&&<span style={S.badge(p.diseaseActivity.includes("Tinggi")||p.diseaseActivity.includes("Flare")?"#ef4444":p.diseaseActivity.includes("Sedang")?"#f59e0b":p.diseaseActivity.includes("Rendah")?"#10b981":"#06b6d4")}>{p.diseaseActivity}</span>}
-                        {currentUser.role==="supervisor"&&<span style={{...S.badge("#475569"),fontSize:11}}>{(res?.full_name || res?.name || "").split(" ")[1]}</span>}
+                        {currentUser.role==="supervisor"&&<span style={{...S.badge("#475569"),fontSize:11}}>👤 {res?.full_name||res?.name||"Residen"}</span>}
                       </div>
                     </div>
                     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
@@ -1830,13 +1841,13 @@ export default function RheumUSU() {
                 <button onClick={checkOut} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444"}}>🚪 Check-Out</button>
               </div>}
             </div>
-            {myAttendance.sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{const res=USERS.residents.find(r=>r.id===a.residentId);return(
+            {myAttendance.sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{const res=findResident(a.residentId);return(
               <div key={a.id} style={{...S.card,padding:"14px 18px",marginBottom:8}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
                   <div>
                     <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:4}}>
                       <div style={{fontWeight:700,color:"#f1f5f9"}}>{a.date}</div>
-                      {currentUser.role==="supervisor"&&<div style={{color:"#94a3b8",fontSize:13}}>{res?.name}</div>}
+                      {currentUser.role==="supervisor"&&<div style={{color:"#94a3b8",fontSize:13}}>{res?.full_name||res?.name||"Residen"}</div>}
                       <span style={S.badge("#10b981")}>Hadir</span>
                     </div>
 
