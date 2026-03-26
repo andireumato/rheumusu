@@ -630,7 +630,7 @@ function PatientForm({ onClose, onSave }) {
           <div>
             <label style={LB}>IMT / BMI (kg/m²)</label>
             <div style={{display:"flex",gap:6}}><input type="number" defaultValue={formRef.current.bmi} onChange={e=>{formRef.current["bmi"]=e.target.value; set("bmi",e.target.value);}} placeholder="Auto-hitung" style={{...IS,marginBottom:0,flex:1}}/><button onClick={calcBmi} style={{background:"#1e3a5f",border:"1px solid #3b82f6",borderRadius:8,color:"#3b82f6",padding:"0 10px",cursor:"pointer",fontSize:11,marginBottom:10}}>Hitung</button></div>
-            {bmiDisplay&&<div style={{fontSize:11,color:parseFloat(bmiDisplay)>=27.5?"#ef4444":parseFloat(p.bmi)>=23?"#f59e0b":"#10b981",marginBottom:8}}>{parseFloat(p.bmi)>=27.5?"⚠ Obesitas II (≥27.5)":parseFloat(bmiDisplay)>=25?"⚠ Obese I (25–27.4)":parseFloat(bmiDisplay)>=23?"⚠ Overweight (23–24.9)":parseFloat(bmiDisplay)>=18.5?"✓ Normal":"⚠ Underweight"}</div>}
+            {bmiDisplay&&<div style={{fontSize:11,color:parseFloat(bmiDisplay)>=27.5?"#ef4444":parseFloat(bmiDisplay||"0")>=23?"#f59e0b":"#10b981",marginBottom:8}}>{parseFloat(bmiDisplay||"0")>=27.5?"⚠ Obesitas II (≥27.5)":parseFloat(bmiDisplay)>=25?"⚠ Obese I (25–27.4)":parseFloat(bmiDisplay)>=23?"⚠ Overweight (23–24.9)":parseFloat(bmiDisplay)>=18.5?"✓ Normal":"⚠ Underweight"}</div>}
           </div>
           <div style={{background:"#0f172a",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#64748b",lineHeight:1.7,height:"fit-content"}}>&lt;18.5 Underweight<br/>18.5–22.9 Normal<br/>23–24.9 Overweight<br/>25–27.4 Obese I<br/>≥27.5 Obese II</div>
         </div>
@@ -638,7 +638,7 @@ function PatientForm({ onClose, onSave }) {
           <div>
             <label style={LB}>Lingkar Pinggang (cm)</label>
             <input type="number" defaultValue={formRef.current.waist} onChange={e=>{formRef.current["waist"]=e.target.value; set("waist",e.target.value);}} onBlur={calcWhr} placeholder="80" style={IS}/>
-            {formRef.current.waist&&<div style={{fontSize:11,color:(formRef.current.gender==="P"&&parseFloat(formRef.current.waist)>=80)||(p.gender==="L"&&parseFloat(p.waist)>=90)?"#ef4444":"#10b981",marginBottom:8}}>{formRef.current.gender==="P"?(parseFloat(formRef.current.waist)>=80?"⚠ Risiko tinggi (P ≥80cm)":"✓ Normal P"):(parseFloat(formRef.current.waist)>=90?"⚠ Risiko tinggi (L ≥90cm)":"✓ Normal L")}</div>}
+            {formRef.current.waist&&<div style={{fontSize:11,color:(formRef.current.gender==="P"&&parseFloat(formRef.current.waist)>=80)||(formRef.current.gender==="L"&&parseFloat(formRef.current.waist||"0")>=90)?"#ef4444":"#10b981",marginBottom:8}}>{formRef.current.gender==="P"?(parseFloat(formRef.current.waist)>=80?"⚠ Risiko tinggi (P ≥80cm)":"✓ Normal P"):(parseFloat(formRef.current.waist)>=90?"⚠ Risiko tinggi (L ≥90cm)":"✓ Normal L")}</div>}
           </div>
           <div>
             <label style={LB}>Lingkar Panggul (cm)</label>
@@ -662,12 +662,12 @@ function PatientForm({ onClose, onSave }) {
         <div style={SH}>Keluhan & Onset Gejala</div>
         <div><label style={LB}>Keluhan Utama</label><textarea defaultValue={formRef.current.chiefComplaint} onChange={e=>{formRef.current["chiefComplaint"]=e.target.value; set("chiefComplaint",e.target.value);}} placeholder="Nyeri sendi, bengkak, kaku pagi hari..." rows={2} style={{...IS,resize:"vertical"}}/></div>
         <div style={G2}>
-          <div><label style={LB}>Tanggal / Perkiraan Onset Gejala *</label><input type="date" defaultValue={formRef.current.onsetDate} onChange={e=>{formRef.current["onsetDate"]=e.target.value; set("onsetDate",e.target.value);calcDelay(e.target.value,p.firstDiagnosisDate);}} style={IS}/></div>
+          <div><label style={LB}>Tanggal / Perkiraan Onset Gejala *</label><input type="date" defaultValue={formRef.current.onsetDate} onChange={e=>{formRef.current["onsetDate"]=e.target.value; set("onsetDate",e.target.value);calcDelay(e.target.value,formRef.current.firstDiagnosisDate);}} style={IS}/></div>
           <div><label style={LB}>Durasi Sebelum Diagnosis</label><div style={{display:"flex",gap:6}}><input type="number" defaultValue={formRef.current.onsetDuration} onChange={e=>{formRef.current["onsetDuration"]=e.target.value; set("onsetDuration",e.target.value);}} placeholder="6" style={{...IS,marginBottom:0,flex:1}}/><select defaultValue={formRef.current.onsetDurationUnit} onChange={e=>{formRef.current["onsetDurationUnit"]=e.target.value; set("onsetDurationUnit",e.target.value);}} style={{...IS,marginBottom:0,width:"auto"}}><option>hari</option><option>minggu</option><option>bulan</option><option>tahun</option></select></div></div>
         </div>
         <div style={SH}>Diagnosis</div>
         <div style={G2}>
-          <div><label style={LB}>Tanggal Diagnosis Pertama *</label><input type="date" defaultValue={formRef.current.firstDiagnosisDate} onChange={e=>{formRef.current["firstDiagnosisDate"]=e.target.value; set("firstDiagnosisDate",e.target.value);calcDelay(p.onsetDate,e.target.value);}} style={IS}/></div>
+          <div><label style={LB}>Tanggal Diagnosis Pertama *</label><input type="date" defaultValue={formRef.current.firstDiagnosisDate} onChange={e=>{formRef.current["firstDiagnosisDate"]=e.target.value; set("firstDiagnosisDate",e.target.value);calcDelay(formRef.current.onsetDate,e.target.value);}} style={IS}/></div>
           <Field k="firstDiagnosisPlace" l="Tempat Diagnosis Pertama" ph="RS / Klinik"/>
         </div>
         <div><label style={LB}>Diagnostic Delay (otomatis / isi manual)</label><input defaultValue={formRef.current.diagnosisDelay} onChange={e=>{formRef.current["diagnosisDelay"]=e.target.value; set("diagnosisDelay",e.target.value);}} placeholder="Selisih onset – diagnosis pertama" style={IS}/></div>
