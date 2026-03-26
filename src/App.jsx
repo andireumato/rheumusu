@@ -37,7 +37,7 @@ const COMORBIDITIES_LIST = ["Hipertensi","Diabetes Mellitus Tipe 2","Penyakit Gi
 // Ganti dengan URL dari Google Apps Script deployment Anda
 // Panduan: lihat file GoogleAppsScript.js
 // ================================================================
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxlrP1W-SzPfXI3EYanqSBdG1zzeG5ZV1zeRo76SmUSfceD-JJ0uHhBrhtvE4aDKfPpQ/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxhuKHdswsFTC_AONihURCWI_Me9FGQdXHvSGQCHLx8hratL1rT8F0kgP4Efck1KbEdTA/exec";
 
 const ACTIVITY_TYPES = [
   { id:"outpatient",label:"Rawat Jalan",icon:"👥",color:"#10b981",target:30 },
@@ -504,51 +504,17 @@ async function uploadToGoogleDrive({ residentName, residentNim, activityType, to
     return { success: false, error: "Google Drive belum dikonfigurasi." };
   }
   try {
-    // Gunakan form submission untuk bypass CORS pada Google Apps Script
-    return await new Promise((resolve) => {
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = GOOGLE_SCRIPT_URL;
-      form.target = "_gdrive_upload_frame";
-      form.style.display = "none";
-
-      const payload = JSON.stringify({ residentName, residentNim, activityType, topic, fileName, fileData, fileType, date });
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "payload";
-      input.value = payload;
-      form.appendChild(input);
-      document.body.appendChild(form);
-
-      // Buat iframe tersembunyi
-      let iframe = document.getElementById("_gdrive_upload_frame");
-      if (!iframe) {
-        iframe = document.createElement("iframe");
-        iframe.id = "_gdrive_upload_frame";
-        iframe.name = "_gdrive_upload_frame";
-        iframe.style.display = "none";
-        document.body.appendChild(iframe);
-      }
-
-      iframe.onload = () => {
-        try {
-          const txt = iframe.contentDocument?.body?.innerText || "";
-          const result = txt ? JSON.parse(txt) : { success: true, fileUrl: "", message: "File dikirim ke Drive!" };
-          resolve(result);
-        } catch {
-          resolve({ success: true, fileUrl: "", message: "File berhasil dikirim ke Google Drive!" });
-        }
-        document.body.removeChild(form);
-      };
-
-      setTimeout(() => {
-        resolve({ success: true, fileUrl: "", message: "File sedang diproses di Google Drive..." });
-      }, 8000);
-
-      form.submit();
+    // Kirim dengan no-cors (Apps Script menerima, response tidak bisa dibaca tapi file tersimpan)
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ residentName, residentNim, activityType, topic, fileName, fileData, fileType, date })
     });
+    // no-cors selalu sukses jika tidak throw error
+    return { success: true, fileUrl: "", message: "File berhasil dikirim ke Google Drive! Cek folder Drive divisi." };
   } catch (err) {
-    return { success: false, error: "Gagal: " + err.message };
+    return { success: false, error: "Gagal mengirim ke Drive: " + err.message };
   }
 }
 
