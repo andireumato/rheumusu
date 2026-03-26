@@ -813,21 +813,11 @@ export default function RheumUSU() {
   const [regError, setRegError] = useState("");
 
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [logbookEntries, setLogbookEntries] = useState([
-    { id:1,residentId:"res1",date:"2024-03-01",type:"outpatient",patientName:"Pasien A",diagnosis:"Rheumatoid Arthritis (RA)",notes:"Kontrol rutin",status:"approved" },
-    { id:2,residentId:"res1",date:"2024-03-03",type:"cbd",topic:"NPSLE Management",notes:"Diskusi NPSLE",status:"pending" },
-    { id:3,residentId:"res2",date:"2024-03-05",type:"journal",topic:"Treat-to-Target in RA",notes:"NEJM 2024",status:"approved" },
-    { id:4,residentId:"res1",date:"2024-03-08",type:"inpatient",patientName:"Pasien B",diagnosis:"SLE dengan Lupus Nefritis",notes:"Pulse methylprednisolone",status:"pending" },
-  ]);
-  const [patients, setPatients] = useState([
-    { id:1,residentId:"res1",mrn:"RSH-2024-001",initials:"Ny. SR",dob:"1979-04-15",age:45,gender:"P",ethnicity:"Batak Toba",religion:"Kristen Protestan",marital:"Menikah",education:"SMA / Sederajat",occupation:"Ibu Rumah Tangga",address:"Kab. Toba",referralSource:"Dokter Spesialis Penyakit Dalam (Sp.PD)",visitDate:"2024-03-01",visitType:"Rawat Jalan (Kontrol)",weight:"62",height:"155",bmi:"25.8",waist:"82",hip:"96",whr:"0.85",systolicBp:"130",diastolicBp:"85",heartRate:"80",chiefComplaint:"Nyeri dan kaku sendi jari tangan bilateral, kaku pagi >1 jam",onsetDate:"2021-01-10",onsetDuration:"8",onsetDurationUnit:"bulan",firstDiagnosisDate:"2021-09-01",firstDiagnosisPlace:"RSUP Adam Malik Medan",diagnosisDelay:"8 bulan",diagnosis:"Rheumatoid Arthritis (RA)",diseaseActivity:"Aktivitas Sedang",currentTherapy:"MTX 15mg/minggu + HCQ 400mg/hari + Asam folat 1mg/hari",previousTherapy:"MTX 7.5mg + prednison",steroidUse:"Ya – dosis rendah (<7.5mg/hari)",nsaidUse:"Sesekali (PRN)",comorbidities:["Hipertensi","Dislipidemia"],familyHistory:"Ya",familyHistoryDetail:"Ibu kandung",smoking:"Tidak Pernah",alcohol:"Tidak",hb:"10.8",wbc:"9.2",plt:"320",esr:"68",crp:"24",albumin:"3.8",creatinine:"0.8",rf:"Positif (256 IU/mL)",antiCcp:"Positif (>200 U/mL)",das28:"4.8",vas:"6",inputDate:"2024-03-01" },
-    { id:2,residentId:"res2",mrn:"RSH-2024-002",initials:"Ny. DL",dob:"1996-07-22",age:27,gender:"P",ethnicity:"Melayu",religion:"Islam",marital:"Menikah",education:"Sarjana (S1)",occupation:"Guru / Dosen",address:"Kota Medan",referralSource:"Dokter Umum / Puskesmas",visitDate:"2024-03-05",visitType:"Rawat Inap",weight:"50",height:"158",bmi:"20.0",waist:"70",hip:"88",whr:"0.80",systolicBp:"110",diastolicBp:"70",heartRate:"90",chiefComplaint:"Ruam malar, artritis, kelelahan, edema tungkai",onsetDate:"2023-02-01",onsetDuration:"4",onsetDurationUnit:"bulan",firstDiagnosisDate:"2023-06-15",firstDiagnosisPlace:"RSUP Adam Malik Medan",diagnosisDelay:"4 bulan",diagnosis:"Systemic Lupus Erythematosus (SLE)",diagnosisSecondary:"Lupus Nefritis kelas IV",diseaseActivity:"Aktivitas Tinggi",currentTherapy:"Prednison 40mg/hari + MMF 2g/hari + HCQ 400mg/hari",steroidUse:"Ya – dosis tinggi (>30mg)",nsaidUse:"Tidak",comorbidities:["Tidak Ada"],familyHistory:"Tidak",smoking:"Tidak Pernah",alcohol:"Tidak",hb:"8.2",wbc:"3.1",plt:"89",esr:"95",crp:"18",albumin:"2.9",creatinine:"1.6",gfr:"48",urineProtein:"+3",ana:"1:640 homogen",antidsDna:"Positif (>200 IU/mL)",antiSm:"Positif",c3:"45",c4:"8",sledai:"18",vas:"7",inputDate:"2024-03-05" },
-  ]);
-  const [attendance, setAttendance] = useState([
-    { id:1,residentId:"res1",date:"2024-03-01",checkIn:"07:15",checkOut:"15:30",status:"present" },
-    { id:2,residentId:"res1",date:"2024-03-04",checkIn:"07:45",checkOut:"16:00",status:"present" },
-    { id:3,residentId:"res2",date:"2024-03-01",checkIn:"07:00",checkOut:"15:00",status:"present" },
-  ]);
+  const [logbookEntries, setLogbookEntries] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [residents, setResidents] = useState([]);
+  const [dataLoading, setDataLoading] = useState(false);
   const [showLogbookModal, setShowLogbookModal] = useState(false);
   const [showPatientModal, setShowPatientModal] = useState(false);
   const [showPatientDetail, setShowPatientDetail] = useState(null);
@@ -888,7 +878,86 @@ export default function RheumUSU() {
       }
     }
   };
-  const logout = () => { setCurrentUser(null); setActiveTab("dashboard"); };
+  const logout = async () => {
+    if (supabase) await supabase.auth.signOut();
+    setCurrentUser(null);
+    setActiveTab("dashboard");
+    setLogbookEntries([]);
+    setPatients([]);
+    setAttendance([]);
+    setResidents([]);
+  };
+
+  // ── Load data dari Supabase saat user login ──────────────────────────
+  useEffect(() => {
+    if (!currentUser || !supabase) return;
+    const uid = currentUser.id || currentUser.sub;
+    const isSupervisor = currentUser.role === "supervisor";
+    setDataLoading(true);
+
+    const loadAll = async () => {
+      try {
+        // Load profiles/residents
+        const { data: profilesData } = await supabase
+          .from("profiles").select("*").eq("role","resident").order("full_name");
+        if (profilesData) setResidents(profilesData);
+
+        // Load logbook
+        let lbQuery = supabase.from("logbook").select("*").order("activity_date", {ascending:false});
+        if (!isSupervisor) lbQuery = lbQuery.eq("resident_id", uid);
+        const { data: lbData } = await lbQuery;
+        if (lbData) setLogbookEntries(lbData.map(e => ({
+          id: e.id, residentId: e.resident_id, date: e.activity_date,
+          type: e.activity_type, patientName: e.patient_name,
+          diagnosis: e.diagnosis, topic: e.topic, notes: e.notes,
+          status: e.status, fileName: e.file_name, fileUrl: e.file_url,
+          feedback: e.feedback
+        })));
+
+        // Load patients
+        let ptQuery = supabase.from("patients").select("*").order("created_at", {ascending:false});
+        if (!isSupervisor) ptQuery = ptQuery.eq("resident_id", uid);
+        const { data: ptData } = await ptQuery;
+        if (ptData) setPatients(ptData.map(p => ({
+          id: p.id, residentId: p.resident_id, mrn: p.mrn,
+          initials: p.initials, dob: p.dob, age: p.age, gender: p.gender,
+          ethnicity: p.ethnicity, religion: p.religion, marital: p.marital_status,
+          education: p.education, occupation: p.occupation, address: p.address,
+          referralSource: p.referral_source, visitDate: p.visit_date, visitType: p.visit_type,
+          weight: p.weight_kg, height: p.height_cm, bmi: p.bmi,
+          waist: p.waist_cm, hip: p.hip_cm, whr: p.whr,
+          systolicBp: p.systolic_bp, diastolicBp: p.diastolic_bp, heartRate: p.heart_rate,
+          chiefComplaint: p.chief_complaint, onsetDate: p.onset_date,
+          onsetDuration: p.onset_duration, firstDiagnosisDate: p.first_diagnosis_date,
+          firstDiagnosisPlace: p.first_diagnosis_place, diagnosisDelay: p.diagnosis_delay,
+          diagnosis: p.diagnosis_primary, diagnosisSecondary: p.diagnosis_secondary,
+          diseaseActivity: p.disease_activity, currentTherapy: p.current_therapy,
+          previousTherapy: p.previous_therapy, steroidUse: p.steroid_use,
+          comorbidities: p.comorbidities || [], rf: p.rf, antiCcp: p.anti_ccp,
+          ana: p.ana, antidsDna: p.anti_dsdna, c3: p.c3, c4: p.c4,
+          esr: p.esr, crp: p.crp, das28: p.das28, sledai: p.sledai,
+          notes: p.notes, inputDate: p.input_date
+        })));
+
+        // Load attendance
+        let attQuery = supabase.from("attendance").select("*").order("date", {ascending:false});
+        if (!isSupervisor) attQuery = attQuery.eq("resident_id", uid);
+        const { data: attData } = await attQuery;
+        if (attData) setAttendance(attData.map(a => ({
+          id: a.id, residentId: a.resident_id, date: a.date,
+          checkIn: a.check_in ? a.check_in.substring(0,5) : null,
+          checkOut: a.check_out ? a.check_out.substring(0,5) : null,
+          status: a.status, location: a.notes
+        })));
+
+      } catch(err) {
+        console.error("Load data error:", err.message);
+      } finally {
+        setDataLoading(false);
+      }
+    };
+    loadAll();
+  }, [currentUser]);
 
   const register = async () => {
     const { fullName, nim, phone, email, password, confirmPassword } = regForm;
@@ -981,20 +1050,103 @@ export default function RheumUSU() {
         uploadMsg = "⚠️ File tersimpan lokal. Drive: " + result.error;
       }
     }
-    setLogbookEntries(prev => [...prev, {
-      ...newLogbook,
-      id: Date.now(),
-      residentId: currentUser.id || currentUser.sub,
-      status: "pending",
-      fileUrl,
-      uploadMsg
-    }]);
+    const uid = currentUser.id || currentUser.sub;
+    if (supabase) {
+      const { data: saved, error } = await supabase.from("logbook").insert({
+        resident_id: uid,
+        activity_type: newLogbook.type,
+        activity_date: newLogbook.date,
+        patient_name: newLogbook.patientName || null,
+        diagnosis: newLogbook.diagnosis || null,
+        topic: newLogbook.topic || null,
+        notes: newLogbook.notes || null,
+        file_name: newLogbook.fileName || null,
+        file_url: fileUrl || null,
+        status: "pending"
+      }).select().single();
+      if (!error && saved) {
+        setLogbookEntries(prev => [{
+          id: saved.id, residentId: saved.resident_id, date: saved.activity_date,
+          type: saved.activity_type, patientName: saved.patient_name,
+          diagnosis: saved.diagnosis, topic: saved.topic, notes: saved.notes,
+          status: saved.status, fileName: saved.file_name, fileUrl: saved.file_url
+        }, ...prev]);
+      } else {
+        console.error("Logbook save error:", error?.message);
+      }
+    } else {
+      setLogbookEntries(prev => [...prev, {
+        ...newLogbook, id: Date.now(), residentId: uid, status:"pending", fileUrl
+      }]);
+    }
     if (uploadMsg) alert(uploadMsg);
     setShowLogbookModal(false);
     setNewLogbook({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"", fileName:"", fileData:"", fileType:"" });
   };
-  const addPatient = (data) => { setPatients(prev=>[...prev,{...data,id:Date.now(),residentId:currentUser.id}]); setShowPatientModal(false); };
-  const approveLogbook = (id) => setLogbookEntries(prev=>prev.map(e=>e.id===id?{...e,status:"approved"}:e));
+  const addPatient = async (data) => {
+    const uid = currentUser.id || currentUser.sub;
+    if (supabase) {
+      const { data: saved, error } = await supabase.from("patients").insert({
+        resident_id: uid, mrn: data.mrn, initials: data.initials,
+        dob: data.dob || null, age: data.age ? parseInt(data.age) : null,
+        gender: data.gender, religion: data.religion, ethnicity: data.ethnicity,
+        marital_status: data.marital, education: data.education, occupation: data.occupation,
+        address: data.address, phone: data.phone,
+        referral_source: data.referralSource, referral_date: data.referralDate || null,
+        visit_date: data.visitDate || null, visit_type: data.visitType,
+        weight_kg: data.weight ? parseFloat(data.weight) : null,
+        height_cm: data.height ? parseFloat(data.height) : null,
+        bmi: data.bmi ? parseFloat(data.bmi) : null,
+        waist_cm: data.waist ? parseFloat(data.waist) : null,
+        hip_cm: data.hip ? parseFloat(data.hip) : null,
+        whr: data.whr ? parseFloat(data.whr) : null,
+        systolic_bp: data.systolicBp ? parseInt(data.systolicBp) : null,
+        diastolic_bp: data.diastolicBp ? parseInt(data.diastolicBp) : null,
+        heart_rate: data.heartRate ? parseInt(data.heartRate) : null,
+        chief_complaint: data.chiefComplaint, onset_date: data.onsetDate || null,
+        onset_duration: data.onsetDuration ? `${data.onsetDuration} ${data.onsetDurationUnit}` : null,
+        first_diagnosis_date: data.firstDiagnosisDate || null,
+        first_diagnosis_place: data.firstDiagnosisPlace,
+        diagnosis_delay: data.diagnosisDelay, diagnosis_primary: data.diagnosis,
+        diagnosis_secondary: data.diagnosisSecondary, disease_activity: data.diseaseActivity,
+        current_therapy: data.currentTherapy, previous_therapy: data.previousTherapy,
+        steroid_use: data.steroidUse, nsaid_use: data.nsaidUse,
+        comorbidities: data.comorbidities, family_history: data.familyHistory,
+        smoking: data.smoking, alcohol: data.alcohol,
+        hb: data.hb ? parseFloat(data.hb) : null,
+        esr: data.esr ? parseFloat(data.esr) : null,
+        crp: data.crp ? parseFloat(data.crp) : null,
+        creatinine: data.creatinine ? parseFloat(data.creatinine) : null,
+        gfr: data.gfr ? parseFloat(data.gfr) : null,
+        rf: data.rf, anti_ccp: data.antiCcp, ana: data.ana,
+        anti_dsdna: data.antidsDna, c3: data.c3 ? parseFloat(data.c3) : null,
+        c4: data.c4 ? parseFloat(data.c4) : null,
+        uric_acid: data.uricAcid ? parseFloat(data.uricAcid) : null,
+        das28: data.das28 ? parseFloat(data.das28) : null,
+        sledai: data.sledai ? parseInt(data.sledai) : null,
+        notes: data.notes, input_date: data.inputDate
+      }).select().single();
+      if (!error && saved) {
+        setPatients(prev => [{...data, id: saved.id, residentId: saved.resident_id}, ...prev]);
+      } else {
+        console.error("Save patient error:", error?.message);
+        setPatients(prev => [...prev, {...data, id: Date.now(), residentId: uid}]);
+      }
+    } else {
+      setPatients(prev => [...prev, {...data, id: Date.now(), residentId: uid}]);
+    }
+    setShowPatientModal(false);
+  };
+  const approveLogbook = async (id) => {
+    if (supabase) {
+      await supabase.from("logbook").update({
+        status: "approved",
+        approved_by: currentUser.id || currentUser.sub,
+        approved_at: new Date().toISOString()
+      }).eq("id", id);
+    }
+    setLogbookEntries(prev => prev.map(e => e.id===id ? {...e, status:"approved"} : e));
+  };
   const checkIn = () => {
     const today = new Date().toISOString().split("T")[0];
     if (attendance.find(a => a.residentId === (currentUser.id || currentUser.sub) && a.date === today)) {
@@ -1027,15 +1179,38 @@ export default function RheumUSU() {
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      setAttendance(prev => [...prev, {
+      const newAtt = {
         id: Date.now(), residentId: currentUser.id || currentUser.sub, date: today,
         checkIn: timeStr, checkOut: null, status: "present",
-        location: "GPS tidak didukung", mapsUrl: null
-      }]);
+        location: "GPS tidak didukung"
+      };
+      if (supabase) await supabase.from("attendance").insert({
+        resident_id: newAtt.residentId, date: today,
+        check_in: timeStr + ":00", status: "present"
+      });
+      setAttendance(prev => [...prev, newAtt]);
     }
   };
-  const checkOut = () => { const today=new Date().toISOString().split("T")[0]; const now=new Date(); setAttendance(prev=>prev.map(a=>a.residentId===currentUser.id&&a.date===today?{...a,checkOut:`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`}:a)); };
-  const activityCounts = (resId) => { const entries=resId?logbookEntries.filter(e=>e.residentId===resId):myLogbook; return ACTIVITY_TYPES.map(a=>({...a,count:entries.filter(e=>e.type===a.id).length})); };
+  const checkOut = async () => {
+    const today = new Date().toISOString().split("T")[0];
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    const uid = currentUser.id || currentUser.sub;
+    if (supabase) {
+      await supabase.from("attendance").update({ check_out: timeStr + ":00" })
+        .eq("resident_id", uid).eq("date", today);
+    }
+    setAttendance(prev => prev.map(a =>
+      (a.residentId === uid || a.residentId === currentUser.id) && a.date === today
+        ? {...a, checkOut: timeStr} : a
+    ));
+  };
+  const activityCounts = (resId) => {
+    const entries = resId ? logbookEntries.filter(e=>e.residentId===resId) : myLogbook;
+    return ACTIVITY_TYPES.map(a => ({...a, count: entries.filter(e=>e.type===a.id).length}));
+  };
+  // Gabungkan USERS.residents dengan data dari Supabase
+  const allResidents = residents.length > 0 ? residents : USERS.residents;
 
   if(!currentUser) return (
     <div style={{...S.app,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:16}}>
