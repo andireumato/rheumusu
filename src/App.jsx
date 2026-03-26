@@ -915,6 +915,7 @@ export default function RheumUSU() {
   const [residents, setResidents] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [showLogbookModal, setShowLogbookModal] = useState(false);
+  const [isSavingLogbook, setIsSavingLogbook] = useState(false);
   const [showPatientModal, setShowPatientModal] = useState(false);
   const [editingPatient, setEditingPatient] = useState(null); // null = tambah baru, object = edit
   const [showPatientDetail, setShowPatientDetail] = useState(null);
@@ -1198,6 +1199,7 @@ export default function RheumUSU() {
           fileName: saved.file_name, fileUrl: saved.file_url
         }, ...prev]);
       } else {
+        setIsSavingLogbook(false);
         alert("Gagal simpan ke database: " + (error?.message || "unknown error"));
       }
     } else {
@@ -1206,6 +1208,7 @@ export default function RheumUSU() {
       }]);
     }
     if (uploadMsg) alert(uploadMsg);
+    setIsSavingLogbook(false);
     setShowLogbookModal(false);
     setNewLogbook({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"", fileName:"", fileData:"", fileType:"" });
   };
@@ -1892,9 +1895,17 @@ export default function RheumUSU() {
             {["cbd","journal","assignment"].includes(newLogbook.type)&&(
               <div>
                 <label style={S.label}>Upload File Materi (PDF/PPT/DOC)</label>
-                <div style={{border:"2px dashed #334155",borderRadius:10,padding:16,textAlign:"center",marginBottom:12,background:"#0f172a",cursor:"pointer"}}
-                  onClick={()=>document.getElementById("fileUpload").click()}>
-                  {newLogbook.fileName?(
+                <div style={{border:`2px dashed ${isSavingLogbook?"#3b82f6":newLogbook.fileName?"#10b981":"#334155"}`,borderRadius:10,padding:16,textAlign:"center",marginBottom:12,background:"#0f172a",cursor:isSavingLogbook?"not-allowed":"pointer",transition:"all 0.2s"}}
+                  onClick={()=>!isSavingLogbook&&document.getElementById("fileUpload").click()}>
+                  {isSavingLogbook?(
+                    <div>
+                      <div style={{fontSize:28,marginBottom:8}}>
+                        <span style={{display:"inline-block",animation:"spin 1s linear infinite"}}>⏳</span>
+                      </div>
+                      <div style={{color:"#3b82f6",fontWeight:700,fontSize:13}}>Mengupload ke Google Drive...</div>
+                      <div style={{color:"#64748b",fontSize:11,marginTop:4}}>{newLogbook.fileName}</div>
+                    </div>
+                  ):newLogbook.fileName?(
                     <div>
                       <div style={{fontSize:24,marginBottom:6}}>📄</div>
                       <div style={{color:"#10b981",fontWeight:600,fontSize:13}}>{newLogbook.fileName}</div>
@@ -1936,7 +1947,20 @@ export default function RheumUSU() {
             )}
             <label style={S.label}>Catatan</label>
             <textarea value={newLogbook.notes} onChange={e=>setNewLogbook(p=>({...p,notes:e.target.value}))} rows={3} style={{...S.input,resize:"vertical"}}/>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button onClick={()=>setShowLogbookModal(false)} style={{...S.btn("#334155"),color:"#94a3b8"}}>Batal</button><button onClick={addLogbook} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>Simpan</button></div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center"}}>
+              <button onClick={()=>setShowLogbookModal(false)} disabled={isSavingLogbook}
+                style={{...S.btn("#334155"),color:"#94a3b8",opacity:isSavingLogbook?0.5:1}}>Batal</button>
+              <button onClick={addLogbook} disabled={isSavingLogbook}
+                style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),minWidth:120,opacity:isSavingLogbook?0.8:1,cursor:isSavingLogbook?"not-allowed":"pointer"}}>
+                {isSavingLogbook?(
+                  <span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
+                    <span style={{display:"inline-block",width:14,height:14,border:"2px solid #ffffff55",borderTopColor:"white",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+                    {newLogbook.fileData?"Mengupload...":"Menyimpan..."}
+                  </span>
+                ):"💾 Simpan"}
+              </button>
+            </div>
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         </div>
       )}
