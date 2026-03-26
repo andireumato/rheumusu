@@ -589,10 +589,11 @@ function PatientForm({ onClose, onSave }) {
   };
 
   const renderStep = () => {
+    const stepKey = `step-${step}`;
     if(step===0) return (
       <div>
         <div style={SH}>Identitas Pasien</div>
-        <div style={G2}><Field k="mrn" l="No. Rekam Medis *" ph="RSH-2024-XXX"/><Field k="initials" l="Inisial Pasien *" ph="Ny. SR / Tn. AB"/></div>
+        <div style={G2}><Field k="mrn" l="No. Rekam Medis *" ph="XXXXX"/><Field k="initials" l="Inisial Pasien *" ph="Ny. SR / Tn. AB"/></div>
         <div style={G2}>
           <div><label style={LB}>Tanggal Lahir</label><input type="date" defaultValue={formRef.current.dob} onChange={e=>{formRef.current["dob"]=e.target.value; set("dob",e.target.value);if(e.target.value){const d=Math.floor((new Date()-new Date(e.target.value))/(365.25*24*3600*1000)); set("age",d); e.target.nextSibling && (e.target.nextSibling.value = d);}}} style={IS}/></div>
           <Field k="age" l="Usia (tahun) *" type="number" ph="45"/>
@@ -943,9 +944,6 @@ export default function RheumUSU() {
         if (profErr) console.error("Profiles error:", profErr.message);
         if (profilesData) {
           setResidents(profilesData.filter(p => p.role === "resident"));
-          // Update currentUser profile jika ada perubahan
-          const myProfile = profilesData.find(p => p.id === uid);
-          if (myProfile) setCurrentUser(prev => ({...prev, ...myProfile}));
         }
 
         // Load logbook
@@ -1015,7 +1013,8 @@ export default function RheumUSU() {
       }
     };
     loadAll();
-  }, [currentUser]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.sub]);
 
   const register = async () => {
     const { fullName, nim, phone, email, password, confirmPassword } = regForm;
