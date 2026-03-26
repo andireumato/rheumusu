@@ -1150,20 +1150,7 @@ export default function RheumUSU() {
   const myPatients = currentUser?.role==="supervisor" ? patients : patients.filter(p=>isMyEntry(p.residentId));
   const myAttendance = currentUser?.role==="supervisor" ? attendance : attendance.filter(a=>isMyEntry(a.residentId));
   const filteredPatients = myPatients.filter(p=>{ const q=patientSearch.toLowerCase(); return !q||[p.mrn,p.initials,p.diagnosis,p.ethnicity,p.address,p.education,p.occupation].some(v=>v?.toString().toLowerCase().includes(q)); });
-    let fileUrl = "";
-    let uploadMsg = "";
-    try {
-    } catch(err) {
-      console.error("addLogbook error:", err);
-      alert("Terjadi kesalahan: " + err.message);
-    } finally {
-      setIsSavingLogbook(false);
-    }
-  };
-  const myLogbook = currentUser?.role==="supervisor" ? logbookEntries : logbookEntries.filter(e=>isMyEntry(e.residentId));
-  const myPatients = currentUser?.role==="supervisor" ? patients : patients.filter(p=>isMyEntry(p.residentId));
-  const myAttendance = currentUser?.role==="supervisor" ? attendance : attendance.filter(a=>isMyEntry(a.residentId));
-  const filteredPatients = myPatients.filter(p=>{ const q=patientSearch.toLowerCase(); return !q||[p.mrn,p.initials,p.diagnosis,p.ethnicity,p.address,p.education,p.occupation].some(v=>v?.toString().toLowerCase().includes(q)); });
+
   const addLogbook = async () => {
     if (isSavingLogbook) return; // Cegah double submit
     setIsSavingLogbook(true);
