@@ -1606,17 +1606,21 @@ export default function RheumUSU() {
                   <div style={{color:"#94a3b8",fontSize:12}}>NIM: {regForm.nim}</div>
                   <div style={{color:"#94a3b8",fontSize:12}}>📧 {regForm.email}</div>
                 </div>
-                <div style={{background:"#1e3a5f",borderRadius:10,padding:12,marginBottom:16,fontSize:12,color:"#94a3b8",textAlign:"left",lineHeight:1.8}}>
-                  📧 <strong style={{color:"#f59e0b"}}>Cek email Anda!</strong><br/>
-                  Link konfirmasi dikirim ke email yang didaftarkan.<br/>
-                  Klik link tersebut, lalu login ke aplikasi.<br/>
+                <div style={{background:"#10b98122",border:"1px solid #10b98144",borderRadius:10,padding:12,marginBottom:16,fontSize:12,color:"#94a3b8",textAlign:"left",lineHeight:1.8}}>
+                  🎉 <strong style={{color:"#10b981"}}>Akun berhasil dibuat!</strong><br/>
+                  Anda sekarang bisa langsung login menggunakan email dan password yang didaftarkan.<br/>
                   <br/>
                   Jika ada kendala hubungi supervisor:<br/>
                   <span style={{color:"#3b82f6"}}>reumatofkusu@gmail.com</span>
                 </div>
-                <button onClick={()=>{setShowRegister(false);setRegStatus(null);setRegForm({fullName:"",nim:"",phone:"",email:"",password:"",confirmPassword:""});}}
-                  style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),width:"100%",padding:12}}>
-                  Kembali ke Login
+                <button onClick={()=>{
+                  // Pre-fill email di form login
+                  setLoginForm(p=>({...p, email:regForm.email, role:"resident"}));
+                  setShowRegister(false);
+                  setRegStatus(null);
+                  setRegForm({fullName:"",nim:"",phone:"",email:"",password:"",confirmPassword:""});
+                }} style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),width:"100%",padding:12}}>
+                  🔐 Login Sekarang
                 </button>
               </div>
             ) : (
