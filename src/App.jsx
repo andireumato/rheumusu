@@ -559,6 +559,9 @@ function PatientForm({ onClose, onSave, initialData=null }) {
     initialData?.comorbidities && Array.isArray(initialData.comorbidities)
       ? initialData.comorbidities : []
   );
+  const [showDiagOther, setShowDiagOther] = useState(
+    initialData?.diagnosis === "Lainnya" || false
+  );
   // Trigger re-render manual hanya saat perlu (step change / kalkulasi)
   const [tick, setTick] = useState(0);
   const refresh = () => setTick(t => t+1);
@@ -724,11 +727,25 @@ function PatientForm({ onClose, onSave, initialData=null }) {
         </div>
         <FI k="diagnosisDelay" l="Diagnostic Delay (otomatis)" ph="Selisih onset - diagnosis"/>
         <div><label style={LB}>Diagnosis Utama *</label>
-          <select defaultValue={get("diagnosis")} onChange={e=>set("diagnosis",e.target.value)} style={IS}>
+          <select defaultValue={get("diagnosis")} onChange={e=>{set("diagnosis",e.target.value);setShowDiagOther(e.target.value==="Lainnya");}} style={IS}>
             <option value="">Pilih...</option>{DIAGNOSES.map(d=><option key={d}>{d}</option>)}
           </select></div>
         <FI k="diagnosisSecondary" l="Diagnosis Sekunder" ph="Lupus Nefritis kelas IV..."/>
-        {get("diagnosis")==="Lainnya"&&<FI k="diagnosisOther" l="Nama Diagnosis Lainnya *" ph="Sebutkan nama diagnosis..."/>}
+        {showDiagOther&&(
+          <div>
+            <label style={LB}>Nama Diagnosis Lainnya *</label>
+            <input
+              defaultValue={get("diagnosisOther")}
+              onChange={e=>set("diagnosisOther",e.target.value)}
+              placeholder="Sebutkan nama diagnosis..."
+              style={{...IS, borderColor:"#f59e0b", borderWidth:2}}
+              autoFocus
+            />
+            <div style={{fontSize:11,color:"#f59e0b",marginTop:-8,marginBottom:8}}>
+              ⚠️ Isi nama diagnosis yang belum ada dalam daftar
+            </div>
+          </div>
+        )}
         <div style={SH}>Riwayat Keluarga</div>
         <div style={G2}>
           <SE k="familyHistory" l="Riwayat Penyakit Serupa" opts={["Ya","Tidak","Tidak Diketahui"]}/>
