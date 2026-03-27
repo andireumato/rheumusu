@@ -25,7 +25,7 @@ const USERS = {
   ]
 };
 
-const DIAGNOSES = ["Rheumatoid Arthritis (RA)","Systemic Lupus Erythematosus (SLE)","Gout Arthritis","Osteoarthritis (OA)","Ankylosing Spondylitis (AS)","Psoriatic Arthritis","Sjögren Syndrome","Systemic Sclerosis","Polymyositis / Dermatomyositis","Vasculitis","Fibromyalgia","Mixed Connective Tissue Disease (MCTD)","Antiphospholipid Syndrome (APS)","Reactive Arthritis","Juvenile Idiopathic Arthritis (JIA)","Lainnya"];
+const DIAGNOSES = ["Rheumatoid Arthritis (RA)","Systemic Lupus Erythematosus (SLE)","Gout Arthritis","Osteoarthritis (OA)","Ankylosing Spondylitis (AS)","Psoriatic Arthritis (PsA)","Sjögren Syndrome","Systemic Sclerosis (SSc)","Polymyositis / Dermatomyositis","Vasculitis","Fibromyalgia","Mixed Connective Tissue Disease (MCTD)","Antiphospholipid Syndrome (APS)","Reactive Arthritis","Juvenile Idiopathic Arthritis (JIA)","Adult Onset Still Disease (AOSD)","Lainnya"];
 const ETHNICITIES = ["Batak Toba","Batak Karo","Batak Mandailing","Batak Simalungun","Batak Pakpak / Dairi","Batak Angkola","Melayu","Jawa","Minangkabau","Aceh","Nias","Tionghoa / Hokkian","India Tamil","Lainnya"];
 const EDUCATION_LEVELS = ["Tidak Sekolah","SD / Sederajat","SMP / Sederajat","SMA / Sederajat","Diploma (D1–D3)","Sarjana (S1)","Pascasarjana (S2/S3)"];
 const OCCUPATIONS = ["Petani / Nelayan","Buruh / Pekerja Kasar","Wiraswasta / Pedagang","Pegawai Swasta","Pegawai Negeri Sipil (PNS)","TNI / Polri","Tenaga Kesehatan","Guru / Dosen","Ibu Rumah Tangga","Pensiunan","Pelajar / Mahasiswa","Tidak Bekerja","Lainnya"];
@@ -71,6 +71,7 @@ const RHEUM_MATERIALS = [
   ]},
   { category:"🧮 Kalkulator Klinis – RA", items:[
     { title:"DAS28-CRP", desc:"Disease Activity Score 28 sendi dengan CRP.", isCalculator:"das28" },
+    { title:"DAS28-LED", desc:"Disease Activity Score 28 sendi dengan LED/ESR.", isCalculator:"das28esr" },
     { title:"SDAI", desc:"Simplified Disease Activity Index RA.", isCalculator:"sdai" },
     { title:"CDAI", desc:"Clinical Disease Activity Index (tanpa lab).", isCalculator:"cdai" },
   ]},
@@ -109,16 +110,19 @@ const emptyPatient = {
   referralSource:"", referralDate:"", visitDate:"", visitType:"Rawat Jalan (Baru)",
   weight:"", height:"", bmi:"", waist:"", hip:"", whr:"", systolicBp:"", diastolicBp:"", heartRate:"",
   chiefComplaint:"", onsetDate:"", onsetDuration:"", onsetDurationUnit:"bulan", firstDiagnosisDate:"", firstDiagnosisPlace:"", diagnosisDelay:"",
-  diagnosis:"", diagnosisSecondary:"", diseaseActivity:"",
+  diagnosis:"", diagnosisSecondary:"", diagnosisOther:"",
   previousTherapy:"", currentTherapy:"", steroidUse:"", nsaidUse:"",
   comorbidities:[], comorbidNotes:"",
   familyHistory:"", familyHistoryDetail:"",
   smoking:"Tidak Pernah", smokingPackYear:"", alcohol:"Tidak", exercise:"", dietNotes:"",
-  hb:"", wbc:"", plt:"", esr:"", crp:"", albumin:"", sgot:"", sgpt:"", ureum:"", creatinine:"", gfr:"", urineProtein:"",
-  rf:"", antiCcp:"", ana:"", antidsDna:"", antiSm:"", antiphospholipid:"", c3:"", c4:"",
+  hb:"", wbc:"", plt:"", esr:"", crp:"", hsCrp:"", ferritin:"", albumin:"",
+  sgot:"", sgpt:"", ureum:"", creatinine:"", gfr:"", urineProtein:"", urineProtein24h:"",
+  rf:"", antiCcp:"", anaIf:"", anaElisa:"", antidsDna:"", anaProfile:"",
+  antiphospholipid:"", hlab27:"", c3:"", c4:"", serologiLainnya:"",
   uricAcid:"", glucose:"", hba1c:"", cholesterol:"", ldl:"", hdl:"", tg:"",
-  das28:"", sdai:"", sledai:"", basdai:"", vas:"",
-  xray:"", usg:"", mri:"", biopsyResult:"",
+  vitD:"", calcium:"",
+  das28crp:"", das28esr:"", sdai:"", cdai:"", sledai:"", mexSledai:"", basdai:"", basfi:"", vas:"",
+  xray:"", usg:"", mri:"", hrctThorax:"", bmd:"", biopsyResult:"",
   notes:"", inputDate: new Date().toISOString().split("T")[0],
 };
 
@@ -145,6 +149,32 @@ function DAS28Calc({ onClose }) {
   );
 }
 
+function DAS28ESRCalc({ onClose }) {
+  const [v, setV] = useState({ tj:"", sj:"", esr:"", gh:"" });
+  const [res, setRes] = useState(null);
+  const IS = { width:"100%", background:"#0f172a", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:14, boxSizing:"border-box", marginBottom:10 };
+  const calc = () => {
+    const [tj,sj,esr,gh] = [v.tj,v.sj,v.esr,v.gh].map(parseFloat);
+    if ([tj,sj,esr,gh].some(isNaN)) return;
+    setRes((0.56*Math.sqrt(tj)+0.28*Math.sqrt(sj)+0.70*Math.log(esr)+0.014*gh).toFixed(2));
+  };
+  const interp = r => r>=5.1?["Aktivitas Tinggi","#ef4444"]:r>=3.2?["Aktivitas Sedang","#f59e0b"]:r>=2.6?["Aktivitas Rendah","#10b981"]:["Remisi","#06b6d4"];
+  return (
+    <div style={{background:"#1e293b",borderRadius:20,padding:24,maxWidth:460,width:"100%",border:"1px solid #334155"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <h3 style={{color:"#f1f5f9",margin:0}}>Kalkulator DAS28-LED (ESR)</h3>
+        <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
+      </div>
+      {[["tj","Tender Joint Count (28 sendi)"],["sj","Swollen Joint Count (28 sendi)"],["esr","LED / ESR (mm/jam)"],["gh","Global Health VAS (0–100mm)"]].map(([k,l])=>(
+        <div key={k}><label style={{color:"#94a3b8",fontSize:12,display:"block",marginBottom:3}}>{l}</label>
+        <input type="number" value={v[k]} onChange={e=>setV(p=>({...p,[k]:e.target.value}))} placeholder="0" style={IS}/></div>
+      ))}
+      <button onClick={calc} style={{width:"100%",padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"white",fontWeight:700,fontSize:15,cursor:"pointer",marginBottom:12}}>Hitung DAS28-LED</button>
+      {res&&(()=>{const[l,c]=interp(parseFloat(res));return<div style={{background:"#0f172a",borderRadius:10,padding:16,textAlign:"center",border:`2px solid ${c}`}}><div style={{fontSize:38,fontWeight:900,color:c}}>{res}</div><div style={{color:c,fontWeight:700,marginBottom:4}}>{l}</div><div style={{color:"#64748b",fontSize:11}}>Remisi &lt;2.6 | Rendah 2.6–3.2 | Sedang 3.2–5.1 | Tinggi &gt;5.1</div></div>;})()}
+      <div style={{marginTop:12,background:"#0f172a",borderRadius:8,padding:12,fontSize:11,color:"#64748b"}}>Formula: 0.56×√TJC + 0.28×√SJC + 0.70×ln(ESR) + 0.014×GH</div>
+    </div>
+  );
+}
 function SDAICalc({ onClose }) {
   const [v, setV] = useState({ tj:"", sj:"", crp:"", pgh:"", egh:"" });
   const [res, setRes] = useState(null);
@@ -697,8 +727,8 @@ function PatientForm({ onClose, onSave, initialData=null }) {
           <select defaultValue={get("diagnosis")} onChange={e=>set("diagnosis",e.target.value)} style={IS}>
             <option value="">Pilih...</option>{DIAGNOSES.map(d=><option key={d}>{d}</option>)}
           </select></div>
-        <FI k="diagnosisSecondary" l="Diagnosis Sekunder" ph="Lupus Nefritis..."/>
-        <SE k="diseaseActivity" l="Aktivitas Penyakit" opts={["Remisi","Aktivitas Rendah","Aktivitas Sedang","Aktivitas Tinggi","Flare Akut"]}/>
+        <FI k="diagnosisSecondary" l="Diagnosis Sekunder" ph="Lupus Nefritis kelas IV..."/>
+        {get("diagnosis")==="Lainnya"&&<FI k="diagnosisOther" l="Nama Diagnosis Lainnya *" ph="Sebutkan nama diagnosis..."/>}
         <div style={SH}>Riwayat Keluarga</div>
         <div style={G2}>
           <SE k="familyHistory" l="Riwayat Penyakit Serupa" opts={["Ya","Tidak","Tidak Diketahui"]}/>
@@ -736,15 +766,38 @@ function PatientForm({ onClose, onSave, initialData=null }) {
     if(step===5) return (
       <div key={stepKey}>
         <div style={SH}>Hematologi & Kimia Darah</div>
-        <div style={G3}>{[["hb","Hb (g/dL)"],["wbc","Leukosit (10³/µL)"],["plt","Trombosit (10³/µL)"],["esr","LED/ESR (mm/jam)"],["crp","CRP (mg/L)"],["albumin","Albumin (g/dL)"],["sgot","SGOT (U/L)"],["sgpt","SGPT (U/L)"],["ureum","Ureum (mg/dL)"],["creatinine","Kreatinin (mg/dL)"],["gfr","eGFR (ml/min)"],["urineProtein","Protein Urin"]].map(([k,l])=>(
+        <div style={G3}>{[
+          ["hb","Hb (g/dL)"],["wbc","Leukosit (10³/µL)"],["plt","Trombosit (10³/µL)"],
+          ["esr","LED/ESR (mm/jam)"],["crp","CRP (mg/L)"],["hsCrp","hsCRP (mg/L)"],
+          ["ferritin","Feritin (ng/mL)"],["albumin","Albumin (g/dL)"],
+          ["sgot","SGOT (U/L)"],["sgpt","SGPT (U/L)"],
+          ["ureum","Ureum (mg/dL)"],["creatinine","Kreatinin (mg/dL)"],
+          ["gfr","eGFR (ml/min)"],["urineProtein","Protein Urin Dipstik"],
+          ["urineProtein24h","Protein Urin 24 jam (mg/24j)"]
+        ].map(([k,l])=>(
           <div key={k}><label style={LB}>{l}</label><input defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
         ))}</div>
-        <div style={SH}>Serologi</div>
-        <div style={G3}>{[["rf","RF"],["antiCcp","Anti-CCP"],["ana","ANA"],["antidsDna","Anti-dsDNA"],["antiSm","Anti-Sm"],["antiphospholipid","Antifosfolipid"],["c3","C3 (mg/dL)"],["c4","C4 (mg/dL)"],["uricAcid","Asam Urat (mg/dL)"]].map(([k,l])=>(
+        <div style={SH}>Serologi Reumatologi</div>
+        <div style={G3}>{[
+          ["rf","RF (IU/mL)"],["antiCcp","Anti-CCP (U/mL)"],
+          ["anaIf","ANA IF (titer)"],["anaElisa","ANA ELISA"],
+          ["antidsDna","Anti-dsDNA (IU/mL)"],["anaProfile","ANA Profile"],
+          ["antiphospholipid","Antifosfolipid"],["hlab27","HLA-B27"],
+          ["c3","C3 (mg/dL)"],["c4","C4 (mg/dL)"]
+        ].map(([k,l])=>(
           <div key={k}><label style={LB}>{l}</label><input defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
-        ))}</div>
+        ))}
+        </div>
+        <div><label style={LB}>Serologi Lainnya (isi bebas)</label>
+          <textarea defaultValue={get("serologiLainnya")} onChange={e=>set("serologiLainnya",e.target.value)} rows={2} placeholder="Contoh: Anti-Ro/SSA positif, Anti-La/SSB negatif, ANCA MPO+..." style={{...IS,resize:"vertical"}}/></div>
         <div style={SH}>Metabolik</div>
-        <div style={G3}>{[["glucose","Gula Darah"],["hba1c","HbA1c (%)"],["cholesterol","Kolesterol"],["ldl","LDL"],["hdl","HDL"],["tg","Trigliserida"]].map(([k,l])=>(
+        <div style={G3}>{[
+          ["glucose","Gula Darah (mg/dL)"],["hba1c","HbA1c (%)"],
+          ["uricAcid","Asam Urat (mg/dL)"],
+          ["cholesterol","Kolesterol Total"],["ldl","LDL (mg/dL)"],
+          ["hdl","HDL (mg/dL)"],["tg","Trigliserida (mg/dL)"],
+          ["vitD","Vit D 25-OH (ng/mL)"],["calcium","Kalsium (mg/dL)"]
+        ].map(([k,l])=>(
           <div key={k}><label style={LB}>{l}</label><input type="number" defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
         ))}</div>
       </div>
@@ -752,14 +805,22 @@ function PatientForm({ onClose, onSave, initialData=null }) {
     if(step===6) return (
       <div key={stepKey}>
         <div style={SH}>Skor Aktivitas Penyakit</div>
-        <div style={G3}>{[["das28","DAS28"],["sdai","SDAI"],["sledai","SLEDAI-2K"],["basdai","BASDAI"],["vas","VAS Nyeri (0–10)"]].map(([k,l])=>(
+        <div style={G3}>{[
+          ["das28crp","DAS28-CRP"],["das28esr","DAS28-LED"],
+          ["sdai","SDAI"],["cdai","CDAI"],
+          ["sledai","SLEDAI-2K"],["mexSledai","MEX-SLEDAI"],
+          ["basdai","BASDAI"],["basfi","BASFI"],
+          ["vas","VAS Nyeri (0–10)"]
+        ].map(([k,l])=>(
           <div key={k}><label style={LB}>{l}</label><input type="number" defaultValue={get(k)} onChange={e=>set(k,e.target.value)} placeholder="-" style={IS}/></div>
         ))}</div>
         <div style={SH}>Pencitraan & Histopatologi</div>
         <TA k="xray" l="Foto Rontgen" ph="Erosi sendi MCP bilateral..."/>
-        <TA k="usg" l="USG Sendi" ph="Double contour sign..."/>
-        <TA k="mri" l="MRI" ph="Sinovitis..."/>
-        <TA k="biopsyResult" l="Biopsi / Histopatologi" ph="GN proliferatif..."/>
+        <TA k="usg" l="USG Sendi" ph="Double contour sign, tofus..."/>
+        <TA k="mri" l="MRI" ph="Sinovitis, bone marrow edema..."/>
+        <TA k="hrctThorax" l="HRCT Thorax" ph="ILD pattern, ground glass opacity..."/>
+        <TA k="bmd" l="BMD (Bone Mineral Density)" ph="T-score L2-L4: -2.1, Femur: -1.8..."/>
+        <TA k="biopsyResult" l="Biopsi / Histopatologi" ph="GN proliferatif difus WHO kelas IV..."/>
       </div>
     );
     if(step===7) return (
@@ -770,7 +831,7 @@ function PatientForm({ onClose, onSave, initialData=null }) {
           <input type="date" defaultValue={get("inputDate")||new Date().toISOString().split("T")[0]} onChange={e=>set("inputDate",e.target.value)} style={IS}/></div>
         <div style={{background:"#0f172a",borderRadius:12,padding:16,marginTop:8}}>
           <div style={{color:"#94a3b8",fontWeight:700,fontSize:12,marginBottom:10}}>📋 Ringkasan</div>
-          {[[get("mrn"),"No. RM"],[`${get("initials")||"-"}, ${get("age")||"-"}th ${data.current.gender==="L"?"♂":"♀"}`,"Pasien"],[get("ethnicity"),"Suku"],[get("education"),"Pendidikan"],[get("occupation"),"Pekerjaan"],[get("marital"),"Status"],[get("referralSource"),"Rujukan"],[get("visitDate"),"Tgl Kunjungan"],[get("bmi")?`${get("bmi")} kg/m²`:"","IMT"],[get("diagnosis"),"Diagnosis"],[get("onsetDate"),"Onset"],[get("diagnosisDelay"),"Diagnostic Delay"],[get("diseaseActivity"),"Aktivitas"],[get("das28"),"DAS28"],[get("sledai"),"SLEDAI"],[comorbids.join(", "),"Komorbid"],[get("currentTherapy"),"Terapi"]].filter(([v])=>v).map(([v,k])=>(
+          {[[get("mrn"),"No. RM"],[`${get("initials")||"-"}, ${get("age")||"-"}th ${data.current.gender==="L"?"♂":"♀"}`,"Pasien"],[get("ethnicity"),"Suku"],[get("education"),"Pendidikan"],[get("occupation"),"Pekerjaan"],[get("marital"),"Status"],[get("referralSource"),"Rujukan"],[get("visitDate"),"Tgl Kunjungan"],[get("bmi")?`${get("bmi")} kg/m²`:"","IMT"],[get("diagnosis"),"Diagnosis"],[get("onsetDate"),"Onset"],[get("diagnosisDelay"),"Diagnostic Delay"],[get("diseaseActivity"),"Aktivitas"],[get("das28crp"),"DAS28-CRP"],[get("das28esr"),"DAS28-LED"],[get("sledai"),"SLEDAI"],[comorbids.join(", "),"Komorbid"],[get("currentTherapy"),"Terapi"]].filter(([v])=>v).map(([v,k])=>(
             <div key={k} style={{display:"flex",gap:8,marginBottom:3}}><span style={{color:"#64748b",fontSize:12,minWidth:120}}>{k}:</span><span style={{color:"#f1f5f9",fontSize:12}}>{v}</span></div>
           ))}
         </div>
@@ -1379,7 +1440,25 @@ export default function RheumUSU() {
         uric_acid: data.uricAcid ? parseFloat(data.uricAcid) : null,
         das28: data.das28 ? parseFloat(data.das28) : null,
         sledai: data.sledai ? parseInt(data.sledai) : null,
-        notes: data.notes, input_date: data.inputDate
+        notes: data.notes, input_date: data.inputDate,
+        hs_crp: data.hsCrp ? parseFloat(data.hsCrp) : null,
+        ferritin: data.ferritin ? parseFloat(data.ferritin) : null,
+        urine_protein_24h: data.urineProtein24h || null,
+        ana_if: data.anaIf || null,
+        ana_elisa: data.anaElisa || null,
+        ana_profile: data.anaProfile || null,
+        hla_b27: data.hlab27 || null,
+        serologi_lainnya: data.serologiLainnya || null,
+        vit_d: data.vitD ? parseFloat(data.vitD) : null,
+        calcium: data.calcium ? parseFloat(data.calcium) : null,
+        das28_crp: data.das28crp ? parseFloat(data.das28crp) : null,
+        das28_esr: data.das28esr ? parseFloat(data.das28esr) : null,
+        cdai: data.cdai ? parseFloat(data.cdai) : null,
+        mex_sledai: data.mexSledai ? parseFloat(data.mexSledai) : null,
+        basfi: data.basfi ? parseFloat(data.basfi) : null,
+        hrct_thorax: data.hrctThorax || null,
+        bmd: data.bmd || null,
+        diagnosis_other: data.diagnosisOther || null
       }).select().single();
       if (!error && saved) {
         setPatients(prev => [{...data, id: saved.id, residentId: saved.resident_id}, ...prev]);
@@ -2058,6 +2137,7 @@ export default function RheumUSU() {
         <div style={S.modal} onClick={()=>setShowCalculator(null)}>
           <div onClick={e=>e.stopPropagation()} style={{overflowY:"auto",maxHeight:"95vh"}}>
             {showCalculator==="das28"&&<DAS28Calc onClose={()=>setShowCalculator(null)}/>}
+            {showCalculator==="das28esr"&&<DAS28ESRCalc onClose={()=>setShowCalculator(null)}/>}
             {showCalculator==="sdai"&&<SDAICalc onClose={()=>setShowCalculator(null)}/>}
             {showCalculator==="cdai"&&<CDAICalc onClose={()=>setShowCalculator(null)}/>}
             {showCalculator==="sledai2k"&&<SLEDAI2KCalc onClose={()=>setShowCalculator(null)}/>}
