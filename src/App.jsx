@@ -861,7 +861,7 @@ function PatientForm({ onClose, onSave, initialData=null }) {
       <div style={{background:"#1e293b",borderRadius:20,width:"100%",maxWidth:640,maxHeight:"92vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
         <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #334155"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <h3 style={{color:"#f1f5f9",margin:0,fontSize:15}}>{initialData?"✏️ Edit Data Pasien":"📋 Form Data Pasien Penelitian"}</h3>
+            <h3 style={{color:"#f1f5f9",margin:0,fontSize:15}}>{initialData?"✏️ Edit Data Pasien":"📋 Form Data Pasien Reumatologi"}</h3>
             <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
           </div>
           <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:2}}>
@@ -995,7 +995,11 @@ export default function RheumUSU() {
   const [showLogbookModal, setShowLogbookModal] = useState(false);
   const [isSavingLogbook, setIsSavingLogbook] = useState(false);
   const [showPatientModal, setShowPatientModal] = useState(false);
-  const [editingPatient, setEditingPatient] = useState(null); // null = tambah baru, object = edit
+  const [editingPatient, setEditingPatient] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
+  const [showAnnounceModal, setShowAnnounceModal] = useState(false);
+  const [newAnnounce, setNewAnnounce] = useState({ title:"", message:"", priority:"normal" });
+  const [showCompletedResidents, setShowCompletedResidents] = useState(false); // null = tambah baru, object = edit
   const [showPatientDetail, setShowPatientDetail] = useState(null);
   const [showMaterialDetail, setShowMaterialDetail] = useState(null);
   const [showCalculator, setShowCalculator] = useState(null);
@@ -1079,6 +1083,14 @@ export default function RheumUSU() {
         const { data: profilesData, error: profErr } = await supabase
           .from("profiles").select("*").order("full_name");
         if (profErr) console.error("Profiles error:", profErr.message);
+
+        // Load announcements
+        const { data: announceData } = await supabase
+          .from("announcements")
+          .select("*")
+          .order("created_at", {ascending: false})
+          .limit(10);
+        if (announceData) setAnnouncements(announceData);
         if (profilesData) {
           setResidents(profilesData.filter(p => p.role === "resident"));
         }
@@ -1553,6 +1565,39 @@ export default function RheumUSU() {
     ));
   };
   // ── Export Pasien DB ke Excel ──────────────────────────────────────
+  const addAnnouncement = async () => {
+    if (!newAnnounce.title || !newAnnounce.message) {
+      alert("Judul dan pesan wajib diisi!"); return;
+    }
+    const ann = {
+      title: newAnnounce.title,
+      message: newAnnounce.message,
+      priority: newAnnounce.priority,
+      created_by: currentUser.full_name || currentUser.name || "Supervisor",
+      created_at: new Date().toISOString()
+    };
+    if (supabase) {
+      const { data: saved, error } = await supabase
+        .from("announcements").insert(ann).select().single();
+      if (!error && saved) {
+        setAnnouncements(prev => [saved, ...prev]);
+      } else {
+        console.error("Announce error:", error?.message);
+        setAnnouncements(prev => [{...ann, id: Date.now()}, ...prev]);
+      }
+    } else {
+      setAnnouncements(prev => [{...ann, id: Date.now()}, ...prev]);
+    }
+    setNewAnnounce({ title:"", message:"", priority:"normal" });
+    setShowAnnounceModal(false);
+  };
+
+  const deleteAnnouncement = async (id) => {
+    if (!window.confirm("Hapus pengumuman ini?")) return;
+    if (supabase) await supabase.from("announcements").delete().eq("id", id);
+    setAnnouncements(prev => prev.filter(a => a.id !== id));
+  };
+
   const exportPatientsExcel = () => {
     if (patients.length === 0) { alert("Tidak ada data pasien untuk diekspor."); return; }
 
@@ -1815,23 +1860,122 @@ export default function RheumUSU() {
             <h2 style={{color:"#f1f5f9",marginTop:0,marginBottom:20}}>{currentUser.role==="supervisor"?"Dashboard Supervisor":`Selamat datang, ${(currentUser.full_name || currentUser.name || "Dokter").split(" ")[1] || (currentUser.full_name || currentUser.name || "Dokter").split(" ")[0]}`}</h2>
             {currentUser.role==="supervisor"?(
               <>
+                {/* Stats Cards */}
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:24}}>
                   {[["👥","Total Residen",allResidents.length,"#3b82f6"],["📋","Total Logbook",logbookEntries.length,"#8b5cf6"],["⏳","Menunggu Approval",logbookEntries.filter(e=>e.status==="pending").length,"#f59e0b"],["🗃️","Total Pasien DB",patients.length,"#10b981"]].map(([icon,label,val,color])=>(
                     <div key={label} style={{...S.card,textAlign:"center",padding:16}}><div style={{fontSize:28}}>{icon}</div><div style={{fontSize:26,fontWeight:900,color}}>{val}</div><div style={{color:"#64748b",fontSize:12}}>{label}</div></div>
                   ))}
                 </div>
-                {allResidents.map(r=>{const counts=activityCounts(r.id);const total=counts.reduce((s,a)=>s+a.count,0);const totalTarget=counts.reduce((s,a)=>s+a.target,0);const pct=Math.round((total/totalTarget)*100);return(
-                  <div key={r.id} style={{...S.card,marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div><div style={{fontWeight:700,color:"#f1f5f9"}}>{r.full_name||r.name||r.email}</div><div style={{color:"#64748b",fontSize:12}}>{r.nim?`NIM ${r.nim}`:""}{r.batch?` · Angkatan ${r.batch}`:""}</div></div>
-                      <div style={{textAlign:"right"}}><div style={{fontWeight:900,fontSize:20,color:"#3b82f6"}}>{pct}%</div><div style={{color:"#64748b",fontSize:12}}>{total}/{totalTarget}</div></div>
-                    </div>
-                    <div style={{background:"#0f172a",borderRadius:100,height:7,overflow:"hidden"}}><div style={{width:`${Math.min(pct,100)}%`,height:"100%",background:"linear-gradient(90deg,#3b82f6,#8b5cf6)",borderRadius:100}}/></div>
+
+                {/* Papan Pengumuman */}
+                <div style={{...S.card,marginBottom:20}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div style={{fontWeight:700,color:"#f1f5f9",fontSize:14}}>📢 Papan Pengumuman</div>
+                    <button onClick={()=>setShowAnnounceModal(true)}
+                      style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),fontSize:12,padding:"6px 12px"}}>
+                      + Tambah Pengumuman
+                    </button>
                   </div>
-                );})}
+                  {announcements.length===0
+                    ?<div style={{color:"#475569",fontSize:13,textAlign:"center",padding:12}}>Belum ada pengumuman</div>
+                    :announcements.map(a=>(
+                      <div key={a.id} style={{background:"#0f172a",borderRadius:10,padding:"10px 14px",marginBottom:8,borderLeft:`3px solid ${a.priority==="urgent"?"#ef4444":a.priority==="penting"?"#f59e0b":"#3b82f6"}`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                          <div style={{flex:1}}>
+                            <div style={{fontWeight:700,color:"#f1f5f9",fontSize:13,marginBottom:3}}>
+                              {a.priority==="urgent"?"🔴":a.priority==="penting"?"🟡":"🔵"} {a.title}
+                            </div>
+                            <div style={{color:"#94a3b8",fontSize:12,lineHeight:1.6}}>{a.message}</div>
+                            <div style={{color:"#475569",fontSize:10,marginTop:5}}>
+                              {new Date(a.created_at).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} · {a.created_by}
+                            </div>
+                          </div>
+                          <button onClick={()=>deleteAnnouncement(a.id)}
+                            style={{background:"none",border:"none",color:"#ef444466",cursor:"pointer",fontSize:16,padding:"0 4px",marginLeft:8}}>×</button>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+
+                {/* Progress Residen - Belum Selesai */}
+                {(()=>{
+                  const activeRes = allResidents.filter(r=>{
+                    const counts=activityCounts(r.id);
+                    const total=counts.reduce((s,a)=>s+a.count,0);
+                    const totalTarget=counts.reduce((s,a)=>s+a.target,0);
+                    return totalTarget===0 || Math.round((total/totalTarget)*100)<100;
+                  });
+                  const doneRes = allResidents.filter(r=>{
+                    const counts=activityCounts(r.id);
+                    const total=counts.reduce((s,a)=>s+a.count,0);
+                    const totalTarget=counts.reduce((s,a)=>s+a.target,0);
+                    return totalTarget>0 && Math.round((total/totalTarget)*100)>=100;
+                  });
+                  return (
+                    <>
+                      {activeRes.length>0&&(
+                        <div style={{marginBottom:4}}>
+                          <div style={{color:"#94a3b8",fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>
+                            📋 Residen Aktif ({activeRes.length})
+                          </div>
+                          {activeRes.map(r=>{const counts=activityCounts(r.id);const total=counts.reduce((s,a)=>s+a.count,0);const totalTarget=counts.reduce((s,a)=>s+a.target,0);const pct=totalTarget>0?Math.round((total/totalTarget)*100):0;return(
+                            <div key={r.id} style={{...S.card,marginBottom:10}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                <div><div style={{fontWeight:700,color:"#f1f5f9",fontSize:14}}>{r.full_name||r.name||r.email}</div><div style={{color:"#64748b",fontSize:12}}>{r.nim?`NIM ${r.nim}`:""}{r.batch?` · Angkatan ${r.batch}`:""}</div></div>
+                                <div style={{textAlign:"right"}}>
+                                  <div style={{fontWeight:900,fontSize:22,color:pct>=75?"#10b981":pct>=50?"#3b82f6":pct>=25?"#f59e0b":"#ef4444"}}>{pct}%</div>
+                                  <div style={{color:"#64748b",fontSize:11}}>{total}/{totalTarget}</div>
+                                </div>
+                              </div>
+                              <div style={{background:"#0f172a",borderRadius:100,height:7,overflow:"hidden"}}>
+                                <div style={{width:`${Math.min(pct,100)}%`,height:"100%",background:pct>=75?"linear-gradient(90deg,#10b981,#06b6d4)":pct>=50?"linear-gradient(90deg,#3b82f6,#8b5cf6)":"linear-gradient(90deg,#f59e0b,#ef4444)",borderRadius:100}}/>
+                              </div>
+                            </div>
+                          );})}
+                        </div>
+                      )}
+                      {doneRes.length>0&&(
+                        <div>
+                          <button onClick={()=>setShowCompletedResidents(v=>!v)}
+                            style={{display:"flex",alignItems:"center",gap:8,background:"#10b98122",border:"1px solid #10b98144",borderRadius:10,color:"#10b981",padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:700,marginBottom:8,width:"100%"}}>
+                            ✅ Residen Selesai ({doneRes.length}) {showCompletedResidents?"▲":"▼"}
+                          </button>
+                          {showCompletedResidents&&doneRes.map(r=>(
+                            <div key={r.id} style={{...S.card,marginBottom:8,border:"1px solid #10b98133",opacity:0.85}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                <div><div style={{fontWeight:700,color:"#10b981",fontSize:14}}>✅ {r.full_name||r.name||r.email}</div><div style={{color:"#64748b",fontSize:12}}>{r.nim?`NIM ${r.nim}`:""}{r.email?` · ${r.email}`:""}</div></div>
+                                <div style={{fontWeight:900,fontSize:20,color:"#10b981"}}>100%</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             ):(
               <>
+                {/* Papan Pengumuman untuk Residen */}
+                {announcements.length>0&&(
+                  <div style={{marginBottom:20}}>
+                    {announcements.map(a=>(
+                      <div key={a.id} style={{...S.card,marginBottom:8,borderLeft:`4px solid ${a.priority==="urgent"?"#ef4444":a.priority==="penting"?"#f59e0b":"#3b82f6"}`,background:a.priority==="urgent"?"#ef444411":"#1e293b"}}>
+                        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                          <div style={{fontSize:20}}>{a.priority==="urgent"?"🔴":a.priority==="penting"?"🟡":"🔵"}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontWeight:700,color:a.priority==="urgent"?"#ef4444":a.priority==="penting"?"#f59e0b":"#f1f5f9",fontSize:14,marginBottom:4}}>{a.title}</div>
+                            <div style={{color:"#94a3b8",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.message}</div>
+                            <div style={{color:"#475569",fontSize:11,marginTop:6}}>
+                              📅 {new Date(a.created_at).toLocaleDateString("id-ID",{weekday:"short",day:"numeric",month:"short",year:"numeric"})} · {a.created_by}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10,marginBottom:20}}>
                   {activityCounts().map(a=><div key={a.id} style={{...S.card,padding:14,textAlign:"center"}}><div style={{fontSize:22}}>{a.icon}</div><div style={{fontWeight:900,fontSize:22,color:a.color}}>{a.count}<span style={{color:"#475569",fontSize:12}}>/{a.target}</span></div><div style={{color:"#64748b",fontSize:11,marginBottom:6}}>{a.label}</div><div style={{background:"#0f172a",borderRadius:100,height:4}}><div style={{width:`${Math.min((a.count/a.target)*100,100)}%`,height:"100%",background:a.color,borderRadius:100}}/></div></div>)}
                 </div>
@@ -1937,7 +2081,7 @@ export default function RheumUSU() {
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <div>
-                <h2 style={{color:"#f1f5f9",margin:0}}>Database Pasien Penelitian</h2>
+                <h2 style={{color:"#f1f5f9",margin:0}}>Database Pasien Reumatologi</h2>
               {patients.length>0&&<button onClick={exportPatientsExcel}
                 style={{...S.btn("linear-gradient(135deg,#10b981,#06b6d4)"),fontSize:12,padding:"7px 14px",display:"flex",alignItems:"center",gap:6}}>
                 📊 Export Excel ({patients.length} pasien)
@@ -2126,6 +2270,35 @@ export default function RheumUSU() {
               </button>
             </div>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Pengumuman */}
+      {showAnnounceModal&&(
+        <div style={S.modal} onClick={()=>setShowAnnounceModal(false)}>
+          <div style={{...S.modalBox,maxWidth:500}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{color:"#f1f5f9",marginTop:0}}>📢 Tambah Pengumuman</h3>
+            <label style={S.label}>Prioritas</label>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              {[["normal","🔵 Normal","#3b82f6"],["penting","🟡 Penting","#f59e0b"],["urgent","🔴 Urgent","#ef4444"]].map(([v,l,c])=>(
+                <button key={v} onClick={()=>setNewAnnounce(p=>({...p,priority:v}))}
+                  style={{flex:1,padding:"8px 4px",borderRadius:8,border:`2px solid ${newAnnounce.priority===v?c:"#334155"}`,background:newAnnounce.priority===v?c+"22":"transparent",color:newAnnounce.priority===v?c:"#64748b",cursor:"pointer",fontSize:12,fontWeight:700}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <label style={S.label}>Judul *</label>
+            <input value={newAnnounce.title} onChange={e=>setNewAnnounce(p=>({...p,title:e.target.value}))}
+              placeholder="Judul pengumuman..." style={S.input}/>
+            <label style={S.label}>Pesan *</label>
+            <textarea value={newAnnounce.message} onChange={e=>setNewAnnounce(p=>({...p,message:e.target.value}))}
+              placeholder="Isi pengumuman untuk semua residen..." rows={5}
+              style={{...S.input,resize:"vertical"}}/>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+              <button onClick={()=>setShowAnnounceModal(false)} style={{...S.btn("#334155"),color:"#94a3b8"}}>Batal</button>
+              <button onClick={addAnnouncement} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>📢 Kirim Pengumuman</button>
+            </div>
           </div>
         </div>
       )}
