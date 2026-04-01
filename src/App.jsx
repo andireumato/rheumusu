@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // Lazy Supabase client - hanya dibuat saat env vars tersedia
@@ -551,6 +551,93 @@ async function uploadToGoogleDrive({ residentName, residentNim, activityType, to
 // ─ Patient Form ─
 const STEPS = ["👤 Identitas","📍 Rujukan","📏 Antropometri","🕐 Riwayat Penyakit","💊 Terapi & Komorbid","🔬 Laboratorium","📊 Skor & Pencitraan","📝 Catatan"];
 
+// ─ Analysis Table Component ─
+function AnalysisTable({ title, rows, n }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const S2 = {
+    th: { background:"#0f172a", color:"#94a3b8", fontSize:11, fontWeight:700, padding:"8px 12px", textAlign:"left", textTransform:"uppercase", letterSpacing:"0.05em" },
+    td: { padding:"7px 12px", fontSize:13, color:"#f1f5f9", borderTop:"1px solid #1e293b" },
+    tdsub: { padding:"5px 12px 5px 24px", fontSize:12, color:"#94a3b8", borderTop:"1px solid #0f172a33" },
+    tdval: { padding:"7px 12px", fontSize:13, color:"#f1f5f9", borderTop:"1px solid #1e293b", textAlign:"right", fontFamily:"monospace" },
+    tdvalSub: { padding:"5px 12px 5px 24px", fontSize:12, color:"#94a3b8", borderTop:"1px solid #0f172a33", textAlign:"right", fontFamily:"monospace" },
+  };
+  return (
+    <div style={{background:"#1e293b",borderRadius:12,marginBottom:16,border:"1px solid #334155",overflow:"hidden"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",background:"#0f172a",cursor:"pointer"}} onClick={()=>setCollapsed(v=>!v)}>
+        <div style={{fontWeight:700,color:"#f1f5f9",fontSize:14}}>{title}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{background:"#3b82f622",borderRadius:20,padding:"2px 10px",color:"#3b82f6",fontSize:12,fontWeight:700}}>n = {n}</span>
+          <span style={{color:"#64748b"}}>{collapsed?"▼":"▲"}</span>
+        </div>
+      </div>
+      {!collapsed&&(
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr>
+                <th style={{...S2.th,width:"45%"}}>Variabel</th>
+                <th style={{...S2.th,textAlign:"right"}}>Rerata ± SD</th>
+                <th style={{...S2.th,textAlign:"right"}}>Median (IQR)</th>
+                <th style={{...S2.th,textAlign:"right"}}>n (%)</th>
+                <th style={{...S2.th,textAlign:"right"}}>N Valid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                if (row.type === "num") {
+                  if (row.nValid === 0) return null;
+                  return (
+                    <tr key={i} style={{background:i%2===0?"#1e293b":"#1a2744"}}>
+                      <td style={S2.td}>{row.var}</td>
+                      <td style={S2.tdval}>{row.display}</td>
+                      <td style={S2.tdval}>{row.displayMedian}</td>
+                      <td style={S2.tdval}>—</td>
+                      <td style={S2.tdval}>{row.nValid}</td>
+                    </tr>
+                  );
+                }
+                if (row.type === "presence" || row.type === "subcat") {
+                  if (row.n === 0) return null;
+                  return (
+                    <tr key={i} style={{background:i%2===0?"#1e293b":"#1a2744"}}>
+                      <td style={row.type==="subcat"?{...S2.td,paddingLeft:24,color:"#94a3b8"}:S2.td}>{row.var}</td>
+                      <td style={S2.tdval}>—</td>
+                      <td style={S2.tdval}>—</td>
+                      <td style={S2.tdval}>{row.display}</td>
+                      <td style={S2.tdval}>{n}</td>
+                    </tr>
+                  );
+                }
+                if (row.type === "cat" && row.sub) {
+                  const validSubs = row.sub.filter(s => s.n > 0);
+                  if (validSubs.length === 0) return null;
+                  return (
+                    <React.Fragment key={i}>
+                      <tr style={{background:"#0f172a"}}>
+                        <td colSpan={5} style={{...S2.td,fontWeight:700,color:"#3b82f6",fontSize:12,padding:"8px 12px"}}>{row.var}</td>
+                      </tr>
+                      {validSubs.map((s, j) => (
+                        <tr key={j} style={{background:j%2===0?"#1e293b":"#192339"}}>
+                          <td style={S2.tdsub}>{s.label}</td>
+                          <td style={S2.tdvalSub}>—</td>
+                          <td style={S2.tdvalSub}>—</td>
+                          <td style={S2.tdvalSub}>{s.display}</td>
+                          <td style={S2.tdvalSub}>{n}</td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                }
+                return null;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PatientForm({ onClose, onSave, initialData=null }) {
   const [step, setStep] = useState(0);
   // Pre-fill dari initialData jika mode edit
@@ -999,7 +1086,9 @@ export default function RheumUSU() {
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
   const [newAnnounce, setNewAnnounce] = useState({ title:"", message:"", priority:"normal" });
-  const [showCompletedResidents, setShowCompletedResidents] = useState(false); // null = tambah baru, object = edit
+  const [showCompletedResidents, setShowCompletedResidents] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analysisFilter, setAnalysisFilter] = useState({ diagnosis:"", gender:"", year:"", activity:"" }); // null = tambah baru, object = edit
   const [showPatientDetail, setShowPatientDetail] = useState(null);
   const [showMaterialDetail, setShowMaterialDetail] = useState(null);
   const [showCalculator, setShowCalculator] = useState(null);
@@ -1598,6 +1687,189 @@ export default function RheumUSU() {
     setAnnouncements(prev => prev.filter(a => a.id !== id));
   };
 
+  // ── Analisis Deskriptif Functions ─────────────────────────────────
+  const generateAnalysis = (allPts) => {
+    // Apply filters
+    let pts = allPts.filter(p => {
+      if (analysisFilter.diagnosis && p.diagnosis !== analysisFilter.diagnosis) return false;
+      if (analysisFilter.gender && p.gender !== analysisFilter.gender) return false;
+      if (analysisFilter.year && p.visitDate && !p.visitDate.startsWith(analysisFilter.year)) return false;
+      if (analysisFilter.activity && p.diseaseActivity !== analysisFilter.activity) return false;
+      return true;
+    });
+
+    if (pts.length === 0) { alert("Tidak ada data sesuai filter!"); return; }
+
+    const n = pts.length;
+    const diagLabel = analysisFilter.diagnosis || "Semua Diagnosis";
+
+    // Helper: hitung numerik (mean±SD dan median[IQR])
+    const numStats = (arr) => {
+      const vals = arr.filter(v => v !== "" && v !== null && v !== undefined && !isNaN(parseFloat(v))).map(parseFloat);
+      if (vals.length === 0) return { display: "-", n: 0 };
+      const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+      const sd = Math.sqrt(vals.reduce((a,b)=>a+(b-mean)**2,0)/vals.length);
+      const sorted = [...vals].sort((a,b)=>a-b);
+      const median = sorted.length%2===0?(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2:sorted[Math.floor(sorted.length/2)];
+      const q1 = sorted[Math.floor(sorted.length/4)];
+      const q3 = sorted[Math.floor(3*sorted.length/4)];
+      return {
+        mean: mean.toFixed(1), sd: sd.toFixed(1),
+        median: median.toFixed(1), q1: q1?.toFixed(1), q3: q3?.toFixed(1),
+        min: sorted[0]?.toFixed(1), max: sorted[sorted.length-1]?.toFixed(1),
+        nValid: vals.length,
+        display: `${mean.toFixed(1)} ± ${sd.toFixed(1)}`,
+        displayMedian: `${median.toFixed(1)} (${q1?.toFixed(1)}–${q3?.toFixed(1)})`
+      };
+    };
+
+    // Helper: hitung kategorik (n, %)
+    const catStats = (arr, categories) => {
+      const vals = arr.filter(v => v);
+      return categories.map(cat => {
+        const count = vals.filter(v => v === cat).length;
+        const pct = n > 0 ? ((count/n)*100).toFixed(1) : "0.0";
+        return { label: cat, n: count, pct, display: `${count} (${pct}%)` };
+      });
+    };
+
+    // Helper: boolean/presence count
+    const presenceCount = (arr) => {
+      const count = arr.filter(v => v && v !== "-" && v !== "Tidak" && v !== "Tidak Ada").length;
+      return { n: count, pct: ((count/n)*100).toFixed(1), display: `${count} (${((count/n)*100).toFixed(1)}%)` };
+    };
+
+    // ── TABEL 1: DEMOGRAFIS ──────────────────────────────────────────
+    const demografis = [
+      { var: "Usia (tahun)", type:"num", ...numStats(pts.map(p=>p.age)) },
+      { var: "Jenis Kelamin", type:"cat", sub: catStats(pts.map(p=>p.gender==="P"?"Perempuan":"Laki-laki"), ["Perempuan","Laki-laki"]) },
+      { var: "Suku", type:"cat", sub: catStats(pts.map(p=>p.ethnicity), ["Batak Toba","Batak Karo","Batak Mandailing","Batak Simalungun","Melayu","Jawa","Minangkabau","Tionghoa / Hokkian","Lainnya"]) },
+      { var: "Status Perkawinan", type:"cat", sub: catStats(pts.map(p=>p.marital), ["Menikah","Belum Menikah","Janda/Duda","Cerai"]) },
+      { var: "Tingkat Pendidikan", type:"cat", sub: catStats(pts.map(p=>p.education), ["SD / Sederajat","SMP / Sederajat","SMA / Sederajat","D3 / Diploma","Sarjana (S1)","Magister (S2)","Doktor (S3)"]) },
+      { var: "Pekerjaan", type:"cat", sub: catStats(pts.map(p=>p.occupation), ["Tidak Bekerja / IRT","Petani / Nelayan","Buruh / Pekerja Harian","Wiraswasta / Pedagang","Pegawai Swasta","PNS / TNI / Polri","Guru / Dosen","Tenaga Kesehatan","Pensiunan","Pelajar / Mahasiswa"]) },
+      { var: "Sumber Rujukan", type:"cat", sub: catStats(pts.map(p=>p.referralSource), ["Dokter Umum / Puskesmas","Dokter Spesialis Penyakit Dalam (Sp.PD)","Dokter Spesialis Lain","IGD RSUP Adam Malik","Datang Sendiri (Self-referral)","Rujukan RS Lain"]) },
+    ];
+
+    // ── TABEL 2: KLINIS ──────────────────────────────────────────────
+    const klinis = [
+      { var: "Diagnosis", type:"cat", sub: catStats(pts.map(p=>p.diagnosis), DIAGNOSES.filter(d=>d!=="Lainnya")) },
+      { var: "Durasi Sakit (bulan)", type:"num", ...numStats(pts.map(p=>parseInt(p.onsetDuration)).filter(v=>!isNaN(v))) },
+      { var: "Diagnostic Delay", type:"text", note: "Lihat kolom individual" },
+      { var: "Berat Badan (kg)", type:"num", ...numStats(pts.map(p=>p.weight)) },
+      { var: "Tinggi Badan (cm)", type:"num", ...numStats(pts.map(p=>p.height)) },
+      { var: "BMI (kg/m²)", type:"num", ...numStats(pts.map(p=>p.bmi)) },
+      { var: "  Underweight (<18.5)", type:"subcat", ...presenceCount(pts.map(p=>parseFloat(p.bmi)<18.5?"yes":"")) },
+      { var: "  Normal (18.5–22.9)", type:"subcat", ...presenceCount(pts.map(p=>parseFloat(p.bmi)>=18.5&&parseFloat(p.bmi)<23?"yes":"")) },
+      { var: "  Overweight (23–24.9)", type:"subcat", ...presenceCount(pts.map(p=>parseFloat(p.bmi)>=23&&parseFloat(p.bmi)<25?"yes":"")) },
+      { var: "  Obesitas (≥25)", type:"subcat", ...presenceCount(pts.map(p=>parseFloat(p.bmi)>=25?"yes":"")) },
+      { var: "Lingkar Pinggang (cm)", type:"num", ...numStats(pts.map(p=>p.waist)) },
+      { var: "WHR", type:"num", ...numStats(pts.map(p=>p.whr)) },
+      { var: "Tekanan Darah Sistolik", type:"num", ...numStats(pts.map(p=>p.systolicBp)) },
+      { var: "Tekanan Darah Diastolik", type:"num", ...numStats(pts.map(p=>p.diastolicBp)) },
+      { var: "Aktivitas Penyakit", type:"cat", sub: catStats(pts.map(p=>p.diseaseActivity), ["Remisi","Aktivitas Rendah","Aktivitas Sedang","Aktivitas Tinggi","Flare Akut"]) },
+      { var: "Komorbiditas", type:"cat", sub: [
+          ...["Hipertensi","Diabetes Mellitus","Dislipidemia","Penyakit Jantung","Penyakit Ginjal Kronik","Infeksi"].map(c=>({
+            label: c,
+            ...presenceCount(pts.map(p=>Array.isArray(p.comorbidities)&&p.comorbidities.includes(c)?"yes":""))
+          }))
+        ]
+      },
+      { var: "Merokok", type:"cat", sub: catStats(pts.map(p=>p.smoking), ["Tidak Pernah","Mantan Perokok","Perokok Aktif"]) },
+    ];
+
+    // ── TABEL 3: LABORATORIUM ────────────────────────────────────────
+    const laboratorium = [
+      { var: "Hemoglobin (g/dL)", type:"num", ...numStats(pts.map(p=>p.hb)) },
+      { var: "Leukosit (10³/µL)", type:"num", ...numStats(pts.map(p=>p.wbc)) },
+      { var: "Trombosit (10³/µL)", type:"num", ...numStats(pts.map(p=>p.plt)) },
+      { var: "LED/ESR (mm/jam)", type:"num", ...numStats(pts.map(p=>p.esr)) },
+      { var: "CRP (mg/L)", type:"num", ...numStats(pts.map(p=>p.crp)) },
+      { var: "hsCRP (mg/L)", type:"num", ...numStats(pts.map(p=>p.hsCrp)) },
+      { var: "Feritin (ng/mL)", type:"num", ...numStats(pts.map(p=>p.ferritin)) },
+      { var: "Albumin (g/dL)", type:"num", ...numStats(pts.map(p=>p.albumin)) },
+      { var: "Kreatinin (mg/dL)", type:"num", ...numStats(pts.map(p=>p.creatinine)) },
+      { var: "eGFR (ml/min)", type:"num", ...numStats(pts.map(p=>p.gfr)) },
+      { var: "RF Positif", type:"presence", ...presenceCount(pts.map(p=>p.rf&&p.rf.toLowerCase().includes("positif")?"yes":"")) },
+      { var: "Anti-CCP Positif", type:"presence", ...presenceCount(pts.map(p=>p.antiCcp&&p.antiCcp.toLowerCase().includes("positif")?"yes":"")) },
+      { var: "ANA IF Positif", type:"presence", ...presenceCount(pts.map(p=>p.anaIf&&p.anaIf!=="-"&&p.anaIf!==""?"yes":"")) },
+      { var: "Anti-dsDNA Positif", type:"presence", ...presenceCount(pts.map(p=>p.antidsDna&&p.antidsDna.toLowerCase().includes("positif")?"yes":"")) },
+      { var: "HLA-B27 Positif", type:"presence", ...presenceCount(pts.map(p=>p.hlab27&&p.hlab27.toLowerCase().includes("positif")?"yes":"")) },
+      { var: "C3 (mg/dL)", type:"num", ...numStats(pts.map(p=>p.c3)) },
+      { var: "C4 (mg/dL)", type:"num", ...numStats(pts.map(p=>p.c4)) },
+      { var: "Asam Urat (mg/dL)", type:"num", ...numStats(pts.map(p=>p.uricAcid)) },
+      { var: "Gula Darah (mg/dL)", type:"num", ...numStats(pts.map(p=>p.glucose)) },
+      { var: "Kolesterol Total (mg/dL)", type:"num", ...numStats(pts.map(p=>p.cholesterol)) },
+      { var: "Vit D 25-OH (ng/mL)", type:"num", ...numStats(pts.map(p=>p.vitD)) },
+    ];
+
+    // ── TABEL 4: SKOR AKTIVITAS ──────────────────────────────────────
+    const skor = [
+      { var: "DAS28-CRP", type:"num", ...numStats(pts.map(p=>p.das28crp)) },
+      { var: "DAS28-LED", type:"num", ...numStats(pts.map(p=>p.das28esr)) },
+      { var: "SDAI", type:"num", ...numStats(pts.map(p=>p.sdai)) },
+      { var: "CDAI", type:"num", ...numStats(pts.map(p=>p.cdai)) },
+      { var: "SLEDAI-2K", type:"num", ...numStats(pts.map(p=>p.sledai)) },
+      { var: "MEX-SLEDAI", type:"num", ...numStats(pts.map(p=>p.mexSledai)) },
+      { var: "BASDAI", type:"num", ...numStats(pts.map(p=>p.basdai)) },
+      { var: "BASFI", type:"num", ...numStats(pts.map(p=>p.basfi)) },
+      { var: "VAS Nyeri (0–10)", type:"num", ...numStats(pts.map(p=>p.vas)) },
+    ];
+
+    // ── TABEL 5: TERAPI ──────────────────────────────────────────────
+    const terapi = [
+      { var: "Penggunaan Steroid", type:"cat", sub: catStats(pts.map(p=>p.steroidUse), ["Tidak","Ya – dosis rendah (<7.5mg/hari)","Ya – dosis sedang (7.5–30mg)","Ya – dosis tinggi (>30mg)","Pulse IV"]) },
+      { var: "Penggunaan NSAID", type:"cat", sub: catStats(pts.map(p=>p.nsaidUse), ["Tidak","Sesekali (PRN)","Reguler"]) },
+      { var: "Jenis Kunjungan", type:"cat", sub: catStats(pts.map(p=>p.visitType), ["Rawat Jalan (Baru)","Rawat Jalan (Kontrol)","Rawat Inap"]) },
+    ];
+
+    setAnalysisResult({ n, title: diagLabel, demografis, klinis, laboratorium, skor, terapi });
+  };
+
+  const exportAnalysisWord = () => {
+    if (!analysisResult) return;
+    const n = analysisResult.n;
+
+    const tableToText = (title, rows) => {
+      let txt = `\n${title}\n`;
+      txt += "=".repeat(70) + "\n";
+      txt += `${"Variabel".padEnd(35)}${"n (%)  atau  Rerata±SD".padEnd(25)}N valid\n`;
+      txt += "-".repeat(70) + "\n";
+      rows.forEach(row => {
+        if (row.type === "num" && row.nValid > 0) {
+          txt += `${row.var.padEnd(35)}${row.display.padEnd(25)}${row.nValid}\n`;
+        } else if (row.type === "cat" && row.sub) {
+          txt += `${row.var}\n`;
+          row.sub.filter(s=>s.n>0).forEach(s => {
+            txt += `  ${s.label.padEnd(33)}${s.display}\n`;
+          });
+        } else if ((row.type==="presence"||row.type==="subcat") && row.n > 0) {
+          txt += `${row.var.padEnd(35)}${row.display}\n`;
+        }
+      });
+      return txt;
+    };
+
+    let fullText = `ANALISIS DESKRIPTIF - DATABASE PASIEN REUMATOLOGI\n`;
+    fullText += `FK-USU / RSUP Adam Malik Medan\n`;
+    fullText += `Diagnosis: ${analysisResult.title} | n = ${n} pasien\n`;
+    fullText += `Tanggal: ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}\n`;
+    fullText += "=".repeat(70);
+    fullText += tableToText("TABEL 1. KARAKTERISTIK DEMOGRAFIS & SOSIAL", analysisResult.demografis);
+    fullText += tableToText("TABEL 2. KARAKTERISTIK KLINIS", analysisResult.klinis);
+    fullText += tableToText("TABEL 3. DATA LABORATORIUM", analysisResult.laboratorium);
+    fullText += tableToText("TABEL 4. SKOR AKTIVITAS PENYAKIT", analysisResult.skor);
+    fullText += tableToText("TABEL 5. POLA TERAPI", analysisResult.terapi);
+    fullText += `\n\nCatatan: Data numerik = rerata ± SD. Data kategorik = n (%). Missing data dikecualikan.`;
+
+    const blob = new Blob(["\uFEFF" + fullText], {type:"text/plain;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Analisis_Deskriptif_${analysisResult.title.replace(/[^a-zA-Z0-9]/g,"_")}_${new Date().toISOString().split("T")[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const exportPatientsExcel = () => {
     if (patients.length === 0) { alert("Tidak ada data pasien untuk diekspor."); return; }
 
@@ -1826,8 +2098,8 @@ export default function RheumUSU() {
   );
 
   const tabs = currentUser.role==="supervisor"
-    ?[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"residents",label:"Residen",icon:"👥"},{id:"logbook",label:"Logbook",icon:"📋"},{id:"patients",label:"Pasien DB",icon:"🗃️"},{id:"attendance",label:"Absensi",icon:"📅"},{id:"materials",label:"Materi",icon:"📚"}]
-    :[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"logbook",label:"Logbook",icon:"📋"},{id:"patients",label:"Pasien DB",icon:"🗃️"},{id:"attendance",label:"Absensi",icon:"📅"},{id:"materials",label:"Materi",icon:"📚"}];
+    ?[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"residents",label:"Residen",icon:"👥"},{id:"logbook",label:"Logbook",icon:"📋"},{id:"patients",label:"Pasien DB",icon:"🗃️"},{id:"attendance",label:"Absensi",icon:"📅"},{id:"analysis",label:"Analisis",icon:"📈"},{id:"materials",label:"Materi",icon:"📚"}]
+    :[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"logbook",label:"Logbook",icon:"📋"},{id:"patients",label:"Pasien DB",icon:"🗃️"},{id:"attendance",label:"Absensi",icon:"📅"},{id:"analysis",label:"Analisis",icon:"📈"},{id:"materials",label:"Materi",icon:"📚"}];
 
   return (
     <div style={S.app}>
@@ -2172,6 +2444,120 @@ export default function RheumUSU() {
               </div>
             );})}
             {myAttendance.length===0&&<div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>Belum ada absensi.</div>}
+          </div>
+        )}
+
+        {activeTab==="analysis"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+              <div>
+                <h2 style={{color:"#f1f5f9",margin:0}}>📈 Analisis Deskriptif</h2>
+                <div style={{color:"#64748b",fontSize:13,marginTop:4}}>
+                  {patients.length} pasien tersedia · Klik "Generate" untuk analisis otomatis
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={()=>generateAnalysis(patients)}
+                  style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),padding:"10px 18px",fontSize:14,display:"flex",alignItems:"center",gap:8}}>
+                  📊 Generate Analisis
+                </button>
+                {analysisResult&&<button onClick={exportAnalysisWord}
+                  style={{...S.btn("linear-gradient(135deg,#10b981,#06b6d4)"),padding:"10px 18px",fontSize:14}}>
+                  📄 Export Word
+                </button>}
+              </div>
+            </div>
+
+            {/* Filter pasien */}
+            <div style={{...S.card,marginBottom:16}}>
+              <div style={{fontWeight:700,color:"#94a3b8",fontSize:12,textTransform:"uppercase",marginBottom:10}}>🔍 Filter Analisis</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
+                <div>
+                  <label style={S.label}>Diagnosis</label>
+                  <select value={analysisFilter.diagnosis} onChange={e=>setAnalysisFilter(p=>({...p,diagnosis:e.target.value}))} style={S.input}>
+                    <option value="">Semua Diagnosis</option>
+                    {DIAGNOSES.filter(d=>d!=="Lainnya").map(d=><option key={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Jenis Kelamin</label>
+                  <select value={analysisFilter.gender} onChange={e=>setAnalysisFilter(p=>({...p,gender:e.target.value}))} style={S.input}>
+                    <option value="">Semua</option>
+                    <option value="P">Perempuan</option>
+                    <option value="L">Laki-laki</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Tahun Kunjungan</label>
+                  <select value={analysisFilter.year} onChange={e=>setAnalysisFilter(p=>({...p,year:e.target.value}))} style={S.input}>
+                    <option value="">Semua Tahun</option>
+                    {["2022","2023","2024","2025","2026"].map(y=><option key={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Aktivitas Penyakit</label>
+                  <select value={analysisFilter.activity} onChange={e=>setAnalysisFilter(p=>({...p,activity:e.target.value}))} style={S.input}>
+                    <option value="">Semua</option>
+                    {["Remisi","Aktivitas Rendah","Aktivitas Sedang","Aktivitas Tinggi","Flare Akut"].map(a=><option key={a}>{a}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {analysisResult&&(
+              <div id="analysis-output">
+                {/* Header */}
+                <div style={{...S.card,marginBottom:16,background:"linear-gradient(135deg,#1e3a5f,#1e293b)",border:"1px solid #3b82f644"}}>
+                  <div style={{fontWeight:900,color:"#f1f5f9",fontSize:16,marginBottom:4}}>
+                    Karakteristik Dasar Subyek Penelitian
+                  </div>
+                  <div style={{color:"#64748b",fontSize:13}}>
+                    {analysisResult.title} · n = {analysisResult.n} pasien
+                  </div>
+                </div>
+
+                {/* Tabel 1: Demografis */}
+                <AnalysisTable title="Tabel 1. Karakteristik Demografis & Sosial" rows={analysisResult.demografis} n={analysisResult.n}/>
+
+                {/* Tabel 2: Klinis */}
+                <AnalysisTable title="Tabel 2. Karakteristik Klinis" rows={analysisResult.klinis} n={analysisResult.n}/>
+
+                {/* Tabel 3: Lab */}
+                <AnalysisTable title="Tabel 3. Data Laboratorium" rows={analysisResult.laboratorium} n={analysisResult.n}/>
+
+                {/* Tabel 4: Skor Aktivitas */}
+                <AnalysisTable title="Tabel 4. Skor Aktivitas Penyakit" rows={analysisResult.skor} n={analysisResult.n}/>
+
+                {/* Tabel 5: Terapi */}
+                <AnalysisTable title="Tabel 5. Pola Terapi" rows={analysisResult.terapi} n={analysisResult.n}/>
+
+                {/* Catatan metodologi */}
+                <div style={{...S.card,marginTop:8,fontSize:12,color:"#64748b"}}>
+                  <strong style={{color:"#94a3b8"}}>Catatan:</strong> Data numerik disajikan sebagai rerata ± SD atau median (IQR) sesuai distribusi data.
+                  Data kategorik disajikan sebagai frekuensi (n) dan persentase (%). Missing data tidak diikutsertakan dalam perhitungan.
+                </div>
+              </div>
+            )}
+
+            {!analysisResult&&patients.length===0&&(
+              <div style={{...S.card,textAlign:"center",padding:60,color:"#475569"}}>
+                <div style={{fontSize:48,marginBottom:12}}>📊</div>
+                <div style={{fontSize:16,fontWeight:600,marginBottom:8}}>Belum ada data pasien</div>
+                <div style={{fontSize:13}}>Tambahkan data pasien di tab "Pasien DB" terlebih dahulu</div>
+              </div>
+            )}
+
+            {!analysisResult&&patients.length>0&&(
+              <div style={{...S.card,textAlign:"center",padding:60,color:"#475569"}}>
+                <div style={{fontSize:48,marginBottom:12}}>🔬</div>
+                <div style={{fontSize:16,fontWeight:600,marginBottom:8}}>{patients.length} pasien siap dianalisis</div>
+                <div style={{fontSize:13,marginBottom:16}}>Atur filter di atas lalu klik "Generate Analisis"</div>
+                <button onClick={()=>generateAnalysis(patients)}
+                  style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),padding:"12px 24px",fontSize:15}}>
+                  📊 Mulai Analisis
+                </button>
+              </div>
+            )}
           </div>
         )}
 
