@@ -1090,6 +1090,10 @@ export default function RheumUSU() {
   const [showCompletedResidents, setShowCompletedResidents] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [logbookViewMode, setLogbookViewMode] = useState("grouped"); // "grouped" | "list"
+  const [expandedResidents, setExpandedResidents] = useState({});
+  const [logbookFilter, setLogbookFilter] = useState({ type:"", status:"", search:"" });
+  const toggleResidentExpand = (id) => setExpandedResidents(prev => ({...prev, [id]: !prev[id]}));
   const [pushPermission, setPushPermission] = useState("default");
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analysisFilter, setAnalysisFilter] = useState({ diagnosis:"", gender:"", year:"", activity:"" }); // null = tambah baru, object = edit
@@ -2365,60 +2369,247 @@ export default function RheumUSU() {
 
         {activeTab==="logbook"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            {/* ── Header ── */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <h2 style={{color:"#f1f5f9",margin:0}}>Logbook Kegiatan</h2>
-              <button onClick={async()=>{
-                if(!supabase) return;
-                const {data} = await supabase.from("logbook").select("*").order("activity_date",{ascending:false});
-                if(data) setLogbookEntries(data.map(e=>({
-                  id:e.id, residentId:e.resident_id, date:e.activity_date,
-                  type:e.activity_type, patientName:e.patient_name,
-                  diagnosis:e.diagnosis, topic:e.topic, notes:e.notes,
-                  status:e.status, fileName:e.file_name, fileUrl:e.file_url,
-                  feedback:e.feedback
-                })));
-              }} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#64748b",padding:"4px 10px",cursor:"pointer",fontSize:11}}>
-                🔄 Refresh
-              </button>
-            </div>
-              {currentUser.role==="resident"&&<button onClick={()=>setShowLogbookModal(true)} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>+ Tambah</button>}
-            </div>
-            {myLogbook.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{const act=ACTIVITY_TYPES.find(a=>a.id===e.type);const res=findResident(e.residentId);return(
-              <div key={e.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10}}>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{act?.icon}</span><span style={{fontWeight:700,color:act?.color}}>{act?.label}</span><span style={{color:"#64748b",fontSize:12}}>{e.date}</span>{currentUser.role==="supervisor"&&<span style={{color:"#94a3b8",fontSize:12}}>· {res?.full_name||res?.name||"Residen"}</span>}</div>
-                  {e.patientName&&<div style={{color:"#94a3b8",fontSize:13}}>👥 {e.patientName} — {e.diagnosis}</div>}
-                  {e.topic&&<div style={{color:"#94a3b8",fontSize:13}}>📌 {e.topic}</div>}
-                  {e.notes&&<div style={{color:"#64748b",fontSize:12,marginTop:3}}>{e.notes}</div>}
-                  {e.fileName&&(
-                    <div style={{marginTop:5,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                      {e.fileUrl ? (
-                        <a href={e.fileUrl} target="_blank" rel="noreferrer"
-                          style={{display:"inline-flex",alignItems:"center",gap:6,background:"#10b98122",border:"1px solid #10b98144",borderRadius:8,padding:"4px 10px",color:"#10b981",fontSize:12,textDecoration:"none",fontWeight:600}}>
-                          📄 {e.fileName}
-                          <span style={{fontSize:10}}>↗ Lihat di Drive</span>
-                        </a>
-                      ) : (
-                        <a href={e.fileData} download={e.fileName}
-                          style={{display:"inline-flex",alignItems:"center",gap:6,background:"#1e3a5f",border:"1px solid #3b82f644",borderRadius:8,padding:"4px 10px",color:"#3b82f6",fontSize:12,textDecoration:"none",fontWeight:600}}>
-                          📄 {e.fileName}
-                          <span style={{fontSize:10,color:"#64748b"}}>↓ Unduh Lokal</span>
-                        </a>
-                      )}
-                      {e.fileUrl&&<span style={{fontSize:10,color:"#10b981"}}>✓ Tersimpan di Google Drive</span>}
-                    </div>
-                  )}
-                </div>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-                  <span style={S.badge(e.status==="approved"?"#10b981":"#f59e0b")}>{e.status==="approved"?"✓ Approved":"⏳ Pending"}</span>
-                  {currentUser.role==="supervisor"&&e.status==="pending"&&<button onClick={()=>approveLogbook(e.id)} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144",padding:"5px 12px",fontSize:12}}>Approve</button>}
-                </div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                {/* Refresh */}
+                <button onClick={async()=>{
+                  if(!supabase) return;
+                  const {data} = await supabase.from("logbook").select("*").order("activity_date",{ascending:false});
+                  if(data) setLogbookEntries(data.map(e=>({
+                    id:e.id, residentId:e.resident_id, date:e.activity_date,
+                    type:e.activity_type, patientName:e.patient_name,
+                    diagnosis:e.diagnosis, topic:e.topic, notes:e.notes,
+                    status:e.status, fileName:e.file_name, fileUrl:e.file_url,
+                    feedback:e.feedback, approvedAt:e.approved_at, approvedBy:e.approved_by
+                  })));
+                }} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#64748b",padding:"6px 10px",cursor:"pointer",fontSize:12}}>
+                  🔄 Refresh
+                </button>
+                {/* View toggle - hanya untuk supervisor */}
+                {currentUser.role==="supervisor"&&(
+                  <div style={{display:"flex",background:"#1e293b",border:"1px solid #334155",borderRadius:8,overflow:"hidden"}}>
+                    <button onClick={()=>setLogbookViewMode("grouped")}
+                      style={{padding:"6px 12px",border:"none",background:logbookViewMode==="grouped"?"#3b82f6":"transparent",color:logbookViewMode==="grouped"?"white":"#64748b",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                      👥 Per Residen
+                    </button>
+                    <button onClick={()=>setLogbookViewMode("list")}
+                      style={{padding:"6px 12px",border:"none",background:logbookViewMode==="list"?"#3b82f6":"transparent",color:logbookViewMode==="list"?"white":"#64748b",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                      📋 Semua
+                    </button>
+                  </div>
+                )}
+                {currentUser.role==="resident"&&(
+                  <button onClick={()=>setShowLogbookModal(true)} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>+ Tambah</button>
+                )}
               </div>
-            );})}
-            {myLogbook.length===0&&<div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>Belum ada kegiatan.</div>}
+            </div>
+
+            {/* ── Filter Bar (supervisor only) ── */}
+            {currentUser.role==="supervisor"&&(
+              <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+                <input value={logbookFilter.search} onChange={e=>setLogbookFilter(p=>({...p,search:e.target.value}))}
+                  placeholder="🔍 Cari topik / nama pasien / diagnosis..." style={{...S.input,marginBottom:0,flex:1,minWidth:180}}/>
+                <select value={logbookFilter.type} onChange={e=>setLogbookFilter(p=>({...p,type:e.target.value}))}
+                  style={{...S.input,marginBottom:0,width:"auto"}}>
+                  <option value="">Semua Kegiatan</option>
+                  {ACTIVITY_TYPES.map(a=><option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}
+                </select>
+                <select value={logbookFilter.status} onChange={e=>setLogbookFilter(p=>({...p,status:e.target.value}))}
+                  style={{...S.input,marginBottom:0,width:"auto"}}>
+                  <option value="">Semua Status</option>
+                  <option value="pending">⏳ Pending</option>
+                  <option value="approved">✅ Approved</option>
+                </select>
+                {(logbookFilter.type||logbookFilter.status||logbookFilter.search)&&(
+                  <button onClick={()=>setLogbookFilter({type:"",status:"",search:""})}
+                    style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:8,color:"#ef4444",padding:"0 12px",cursor:"pointer",fontSize:12}}>
+                    ✕ Reset
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ── Logbook Entry Card ── */}
+            {(()=>{
+              const LogbookEntryCard = ({e, showResident=false}) => {
+                const act = ACTIVITY_TYPES.find(a=>a.id===e.type);
+                const res = findResident(e.residentId);
+                return (
+                  <div style={{background:"#0f172a",borderRadius:10,padding:"12px 14px",marginBottom:8,borderLeft:`3px solid ${act?.color||"#334155"}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                          <span style={{fontSize:15}}>{act?.icon}</span>
+                          <span style={{fontWeight:700,color:act?.color,fontSize:13}}>{act?.label}</span>
+                          <span style={{color:"#475569",fontSize:11}}>{e.date}</span>
+                          {showResident&&<span style={{color:"#64748b",fontSize:11}}>· {res?.full_name||res?.name||"Residen"}</span>}
+                        </div>
+                        {e.patientName&&<div style={{color:"#94a3b8",fontSize:12}}>👥 {e.patientName}{e.diagnosis?` — ${e.diagnosis}`:""}</div>}
+                        {e.topic&&<div style={{color:"#94a3b8",fontSize:12}}>📌 {e.topic}</div>}
+                        {e.notes&&<div style={{color:"#64748b",fontSize:11,marginTop:2,fontStyle:"italic"}}>{typeof e.notes==="string"&&e.notes.startsWith("{")?"[CBD Digital]":e.notes.substring(0,80)+(e.notes.length>80?"...":"")}</div>}
+                        {e.fileName&&(
+                          <div style={{marginTop:6}}>
+                            {e.fileUrl
+                              ?<a href={e.fileUrl} target="_blank" rel="noreferrer"
+                                style={{display:"inline-flex",alignItems:"center",gap:5,background:"#10b98122",border:"1px solid #10b98144",borderRadius:6,padding:"3px 8px",color:"#10b981",fontSize:11,textDecoration:"none"}}>
+                                📄 {e.fileName} ↗ Drive
+                              </a>
+                              :<a href={e.fileData} download={e.fileName}
+                                style={{display:"inline-flex",alignItems:"center",gap:5,background:"#1e3a5f",border:"1px solid #3b82f644",borderRadius:6,padding:"3px 8px",color:"#3b82f6",fontSize:11,textDecoration:"none"}}>
+                                📄 {e.fileName} ↓
+                              </a>}
+                          </div>
+                        )}
+                        {e.status==="approved"&&e.approvedAt&&(
+                          <div style={{fontSize:10,color:"#10b98166",marginTop:4}}>
+                            ✅ Approved {new Date(e.approvedAt).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"})}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5,flexShrink:0}}>
+                        <span style={{...S.badge(e.status==="approved"?"#10b981":"#f59e0b"),fontSize:10}}>
+                          {e.status==="approved"?"✓ Approved":"⏳ Pending"}
+                        </span>
+                        {currentUser.role==="supervisor"&&e.status==="pending"&&(
+                          <button onClick={()=>approveLogbook(e.id)}
+                            style={{background:"#10b98133",border:"1px solid #10b98144",borderRadius:6,color:"#10b981",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
+                            Approve
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              };
+
+              // ── VIEW: Residen (grouped) ─────────────────────────────
+              if (currentUser.role==="supervisor" && logbookViewMode==="grouped") {
+                const filteredEntries = logbookEntries.filter(e=>{
+                  if(logbookFilter.type && e.type!==logbookFilter.type) return false;
+                  if(logbookFilter.status && e.status!==logbookFilter.status) return false;
+                  if(logbookFilter.search){
+                    const q=logbookFilter.search.toLowerCase();
+                    if(![e.topic,e.patientName,e.diagnosis,e.notes].some(v=>v?.toLowerCase().includes(q))) return false;
+                  }
+                  return true;
+                });
+                const pendingAll = logbookEntries.filter(e=>e.status==="pending").length;
+
+                return (
+                  <div>
+                    {/* Summary bar */}
+                    <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+                      {[
+                        ["📋","Total",logbookEntries.length,"#3b82f6"],
+                        ["⏳","Pending",pendingAll,"#f59e0b"],
+                        ["✅","Approved",logbookEntries.filter(e=>e.status==="approved").length,"#10b981"],
+                      ].map(([icon,label,val,color])=>(
+                        <div key={label} style={{background:"#0f172a",borderRadius:10,padding:"8px 16px",display:"flex",alignItems:"center",gap:8}}>
+                          <span>{icon}</span>
+                          <span style={{color,fontWeight:700,fontSize:16}}>{val}</span>
+                          <span style={{color:"#64748b",fontSize:12}}>{label}</span>
+                        </div>
+                      ))}
+                      {filteredEntries.length!==logbookEntries.length&&(
+                        <div style={{background:"#3b82f622",borderRadius:10,padding:"8px 16px",color:"#3b82f6",fontSize:12,display:"flex",alignItems:"center"}}>
+                          🔍 Menampilkan {filteredEntries.length} dari {logbookEntries.length} entri
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Grouped by residen */}
+                    {allResidents.map(r=>{
+                      const resEntries = filteredEntries.filter(e=>e.residentId===r.id);
+                      if(resEntries.length===0) return null;
+                      const pendingCount = resEntries.filter(e=>e.status==="pending").length;
+                      const isExpanded = expandedResidents[r.id]!==false; // default expanded
+                      const counts = activityCounts(r.id);
+                      return (
+                        <div key={r.id} style={{...S.card,marginBottom:12,padding:0,overflow:"hidden"}}>
+                          {/* Residen header - klik untuk expand/collapse */}
+                          <div onClick={()=>toggleResidentExpand(r.id)}
+                            style={{padding:"12px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#1e293b"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:12}}>
+                              <div style={{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"white",fontSize:14,flexShrink:0}}>
+                                {(r.full_name||r.name||"?").charAt(0)}
+                              </div>
+                              <div>
+                                <div style={{fontWeight:700,color:"#f1f5f9",fontSize:14}}>{r.full_name||r.name||r.email}</div>
+                                <div style={{color:"#64748b",fontSize:11}}>{r.nim?`NIM ${r.nim}`:""} · {resEntries.length} kegiatan</div>
+                              </div>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              {pendingCount>0&&(
+                                <span style={{background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:20,padding:"2px 10px",color:"#f59e0b",fontSize:11,fontWeight:700}}>
+                                  ⏳ {pendingCount} pending
+                                </span>
+                              )}
+                              {/* Progress mini */}
+                              {(()=>{
+                                const total=counts.reduce((s,a)=>s+a.count,0);
+                                const target=counts.reduce((s,a)=>s+a.target,0);
+                                const pct=target>0?Math.round((total/target)*100):0;
+                                return <span style={{color:pct>=100?"#10b981":"#3b82f6",fontSize:12,fontWeight:700}}>{pct}%</span>;
+                              })()}
+                              <span style={{color:"#64748b",fontSize:16}}>{isExpanded?"▲":"▼"}</span>
+                            </div>
+                          </div>
+                          {/* Activity summary pills */}
+                          {isExpanded&&(
+                            <div style={{padding:"8px 16px",background:"#0f172a",display:"flex",gap:6,flexWrap:"wrap",borderBottom:"1px solid #1e293b"}}>
+                              {counts.map(a=>(
+                                <span key={a.id} style={{background:a.count>=a.target?"#10b98122":"#1e293b",border:`1px solid ${a.count>=a.target?"#10b98144":"#334155"}`,borderRadius:20,padding:"2px 8px",fontSize:10,color:a.count>=a.target?"#10b981":a.color,fontWeight:600}}>
+                                  {a.icon} {a.count}/{a.target}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {/* Entries */}
+                          {isExpanded&&(
+                            <div style={{padding:"10px 14px"}}>
+                              {resEntries.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(
+                                <LogbookEntryCard key={e.id} e={e} showResident={false}/>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {filteredEntries.length===0&&(
+                      <div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>
+                        Tidak ada logbook sesuai filter
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // ── VIEW: List (flat) - supervisor + residen ────────────
+              const filteredMine = myLogbook.filter(e=>{
+                if(currentUser.role==="supervisor"){
+                  if(logbookFilter.type && e.type!==logbookFilter.type) return false;
+                  if(logbookFilter.status && e.status!==logbookFilter.status) return false;
+                  if(logbookFilter.search){
+                    const q=logbookFilter.search.toLowerCase();
+                    if(![e.topic,e.patientName,e.diagnosis].some(v=>v?.toLowerCase().includes(q))) return false;
+                  }
+                }
+                return true;
+              });
+              return (
+                <div>
+                  {filteredMine.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(
+                    <LogbookEntryCard key={e.id} e={e} showResident={currentUser.role==="supervisor"}/>
+                  ))}
+                  {filteredMine.length===0&&<div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>Belum ada kegiatan.</div>}
+                </div>
+              );
+            })()}
+
             <div style={{textAlign:"center",fontSize:10,color:"#334155",marginTop:8}}>
-              🔄 Status logbook sync otomatis • Tekan Refresh jika perlu
+              🔄 Status sync otomatis · Tekan Refresh jika perlu
             </div>
           </div>
         )}
