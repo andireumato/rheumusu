@@ -1089,6 +1089,8 @@ export default function RheumUSU() {
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
   const [newAnnounce, setNewAnnounce] = useState({ title:"", message:"", priority:"normal" });
   const [showCompletedResidents, setShowCompletedResidents] = useState(false);
+  const [attFilter, setAttFilter] = useState("");
+  const [attExpandedRes, setAttExpandedRes] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [logbookViewMode, setLogbookViewMode] = useState("grouped"); // "grouped" | "list"
@@ -2699,32 +2701,182 @@ export default function RheumUSU() {
 
         {activeTab==="attendance"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+            {/* ── Header ── */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <h2 style={{color:"#f1f5f9",margin:0}}>Absensi</h2>
               {currentUser.role==="resident"&&<div style={{display:"flex",gap:8}}>
                 <button onClick={checkIn} style={{...S.btn("#10b98133"),color:"#10b981",border:"1px solid #10b98144"}}>✅ Check-In</button>
                 <button onClick={checkOut} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444"}}>🚪 Check-Out</button>
               </div>}
             </div>
-            {myAttendance.sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{const res=findResident(a.residentId);return(
-              <div key={a.id} style={{...S.card,padding:"14px 18px",marginBottom:8}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:4}}>
-                      <div style={{fontWeight:700,color:"#f1f5f9"}}>{a.date}</div>
-                      {currentUser.role==="supervisor"&&<div style={{color:"#94a3b8",fontSize:13}}>{res?.full_name||res?.name||"Residen"}</div>}
-                      <span style={S.badge("#10b981")}>Hadir</span>
-                    </div>
 
+            {currentUser.role==="supervisor"?(
+              <>
+                {/* ── Ringkasan Kehadiran ── */}
+                {(()=>{
+                  const today = new Date().toISOString().split("T")[0];
+                  const thisMonth = today.substring(0,7);
+                  const hadirHariIni = attendance.filter(a=>a.date===today).length;
+                  const totalHariIni = allResidents.length;
+                  const bulanIni = attendance.filter(a=>a.date.startsWith(thisMonth));
+                  return (
+                    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+                      {[
+                        ["👥","Hadir Hari Ini",`${hadirHariIni}/${totalHariIni}`,"#10b981"],
+                        ["📅","Total Absensi Bulan Ini",bulanIni.length,"#3b82f6"],
+                        ["⏰","Belum Check-Out",bulanIni.filter(a=>!a.checkOut).length,"#f59e0b"],
+                        ["📊","Total Semua",attendance.length,"#8b5cf6"],
+                      ].map(([icon,label,val,color])=>(
+                        <div key={label} style={{background:"#0f172a",borderRadius:10,padding:"8px 16px",display:"flex",alignItems:"center",gap:8,flex:1,minWidth:140}}>
+                          <span style={{fontSize:18}}>{icon}</span>
+                          <div><div style={{color,fontWeight:700,fontSize:18}}>{val}</div><div style={{color:"#64748b",fontSize:11}}>{label}</div></div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* ── Filter bulan ── */}
+                {(()=>{
+                  const months = [...new Set(attendance.map(a=>a.date.substring(0,7)))].sort().reverse();
+                  return months.length > 0 ? (
+                    <div style={{marginBottom:14,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                      <span style={{color:"#64748b",fontSize:12}}>Filter bulan:</span>
+                      {months.slice(0,6).map(m=>(
+                        <button key={m} onClick={()=>setAttFilter(p=>p===m?"":m)}
+                          style={{padding:"4px 10px",borderRadius:20,border:`1.5px solid ${attFilter===m?"#3b82f6":"#334155"}`,background:attFilter===m?"#3b82f622":"transparent",color:attFilter===m?"#3b82f6":"#64748b",cursor:"pointer",fontSize:12,fontWeight:attFilter===m?700:400}}>
+                          {new Date(m+"-01").toLocaleDateString("id-ID",{month:"long",year:"numeric"})}
+                        </button>
+                      ))}
+                      {attFilter&&<button onClick={()=>setAttFilter("")} style={{background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:12}}>✕ Reset</button>}
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* ── Grouped by residen ── */}
+                {allResidents.map(r=>{
+                  const resAtt = attendance
+                    .filter(a=>a.residentId===r.id && (!attFilter||a.date.startsWith(attFilter)))
+                    .sort((a,b)=>b.date.localeCompare(a.date));
+                  if(resAtt.length===0) return null;
+                  const isOpen = attExpandedRes[r.id] !== false;
+                  const belumCheckout = resAtt.filter(a=>!a.checkOut).length;
+                  const totalDurasi = resAtt.filter(a=>a.checkIn&&a.checkOut).reduce((sum,a)=>{
+                    const [ih,im] = a.checkIn.split(":").map(Number);
+                    const [oh,om] = a.checkOut.split(":").map(Number);
+                    return sum + (oh*60+om - ih*60-im);
+                  },0);
+                  const avgDurasi = resAtt.filter(a=>a.checkOut).length > 0
+                    ? Math.round(totalDurasi/resAtt.filter(a=>a.checkOut).length)
+                    : 0;
+
+                  return (
+                    <div key={r.id} style={{...S.card,marginBottom:12,padding:0,overflow:"hidden"}}>
+                      {/* Header residen */}
+                      <div onClick={()=>setAttExpandedRes(p=>({...p,[r.id]:!isOpen}))}
+                        style={{padding:"12px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#1e293b"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#10b981,#06b6d4)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"white",fontSize:13,flexShrink:0}}>
+                            {(r.full_name||r.name||"?").charAt(0)}
+                          </div>
+                          <div>
+                            <div style={{fontWeight:700,color:"#f1f5f9",fontSize:14}}>{r.full_name||r.name||r.email}</div>
+                            <div style={{color:"#64748b",fontSize:11}}>
+                              {resAtt.length} hari hadir
+                              {avgDurasi>0&&` · Rata-rata ${Math.floor(avgDurasi/60)}j${avgDurasi%60}m`}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          {belumCheckout>0&&(
+                            <span style={{background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:20,padding:"2px 8px",color:"#f59e0b",fontSize:11}}>
+                              ⏰ {belumCheckout} blm checkout
+                            </span>
+                          )}
+                          <span style={{color:"#64748b",fontSize:14}}>{isOpen?"▲":"▼"}</span>
+                        </div>
+                      </div>
+
+                      {/* Daftar absensi */}
+                      {isOpen&&(
+                        <div style={{padding:"8px 14px"}}>
+                          {resAtt.map(a=>{
+                            const durasi = a.checkIn&&a.checkOut ? (()=>{
+                              const [ih,im]=a.checkIn.split(":").map(Number);
+                              const [oh,om]=a.checkOut.split(":").map(Number);
+                              const d=oh*60+om-ih*60-im;
+                              return `${Math.floor(d/60)}j ${d%60}m`;
+                            })() : null;
+                            return (
+                              <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1e293b"}}>
+                                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                  <div style={{width:8,height:8,borderRadius:"50%",background:a.checkOut?"#10b981":"#f59e0b",flexShrink:0}}/>
+                                  <div>
+                                    <div style={{color:"#f1f5f9",fontSize:13,fontWeight:500}}>
+                                      {new Date(a.date).toLocaleDateString("id-ID",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}
+                                    </div>
+                                    {durasi&&<div style={{color:"#64748b",fontSize:11}}>Durasi: {durasi}</div>}
+                                  </div>
+                                </div>
+                                <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                                  <div style={{textAlign:"center"}}>
+                                    <div style={{color:"#64748b",fontSize:9,textTransform:"uppercase"}}>In</div>
+                                    <div style={{color:"#10b981",fontWeight:700,fontSize:13}}>{a.checkIn||"-"}</div>
+                                  </div>
+                                  <div style={{color:"#334155"}}>→</div>
+                                  <div style={{textAlign:"center"}}>
+                                    <div style={{color:"#64748b",fontSize:9,textTransform:"uppercase"}}>Out</div>
+                                    <div style={{color:a.checkOut?"#ef4444":"#475569",fontWeight:700,fontSize:13}}>{a.checkOut||"—"}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {attendance.length===0&&<div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>Belum ada data absensi.</div>}
+              </>
+            ):(
+              /* ── Tampilan Residen ── */
+              <>
+                {myAttendance.sort((a,b)=>b.date.localeCompare(a.date)).map(a=>(
+                  <div key={a.id} style={{...S.card,padding:"12px 16px",marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontWeight:600,color:"#f1f5f9",fontSize:13}}>
+                          {new Date(a.date).toLocaleDateString("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                        </div>
+                        {(()=>{
+                          if(!a.checkIn||!a.checkOut) return null;
+                          const [ih,im]=a.checkIn.split(":").map(Number);
+                          const [oh,om]=a.checkOut.split(":").map(Number);
+                          const d=oh*60+om-ih*60-im;
+                          return <div style={{color:"#64748b",fontSize:11}}>Durasi: {Math.floor(d/60)}j {d%60}m</div>;
+                        })()}
+                      </div>
+                      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{color:"#64748b",fontSize:9,textTransform:"uppercase"}}>Check-In</div>
+                          <div style={{color:"#10b981",fontWeight:700,fontSize:15}}>{a.checkIn||"-"}</div>
+                        </div>
+                        {a.checkOut&&<>
+                          <div style={{color:"#334155"}}>→</div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{color:"#64748b",fontSize:9,textTransform:"uppercase"}}>Check-Out</div>
+                            <div style={{color:"#ef4444",fontWeight:700,fontSize:15}}>{a.checkOut}</div>
+                          </div>
+                        </>}
+                        {!a.checkOut&&<span style={{...S.badge("#f59e0b"),fontSize:10}}>Belum Out</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{display:"flex",gap:16,alignItems:"center"}}>
-                    <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:10}}>CHECK-IN</div><div style={{color:"#10b981",fontWeight:700,fontSize:15}}>{a.checkIn}</div></div>
-                    {a.checkOut&&<div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:10}}>CHECK-OUT</div><div style={{color:"#ef4444",fontWeight:700,fontSize:15}}>{a.checkOut}</div></div>}
-                  </div>
-                </div>
-              </div>
-            );})}
-            {myAttendance.length===0&&<div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>Belum ada absensi.</div>}
+                ))}
+                {myAttendance.length===0&&<div style={{...S.card,textAlign:"center",color:"#64748b",padding:40}}>Belum ada absensi.</div>}
+              </>
+            )}
           </div>
         )}
 
