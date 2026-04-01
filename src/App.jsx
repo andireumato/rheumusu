@@ -975,7 +975,7 @@ function PatientForm({ onClose, onSave, initialData=null }) {
 }
 
 
-function PatientDetail({ patient, onClose, onEdit }) {
+function PatientDetail({ patient, onClose, onEdit, onDelete }) {
   const res = USERS.residents.find(r=>r.id===patient.residentId);
   const Sec = ({title,children}) => <div style={{marginBottom:16}}><div style={{color:"#3b82f6",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8,paddingBottom:4,borderBottom:"1px solid #1e3a5f"}}>{title}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 16px"}}>{children}</div></div>;
   const Row = ({l,v}) => v?<div><span style={{color:"#64748b",fontSize:12}}>{l}: </span><span style={{color:"#f1f5f9",fontSize:12,fontWeight:500}}>{v}</span></div>:null;
@@ -986,7 +986,8 @@ function PatientDetail({ patient, onClose, onEdit }) {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:patient.lastUpdatedAt?10:0}}>
             <div><h3 style={{color:"#f1f5f9",margin:0}}>{patient.initials||patient.mrn}</h3><div style={{color:"#64748b",fontSize:12}}>{patient.diagnosis} · Input: {res?.full_name||res?.name||"Residen"}</div></div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              {onEdit&&<button onClick={onEdit} style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:10,color:"white",padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5}}>✏️ Edit</button>}
+              {onEdit&&<button onClick={onEdit} style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:10,color:"white",padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:13}}>✏️ Edit</button>}
+              {onDelete&&<button onClick={onDelete} style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:10,color:"#ef4444",padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:13}}>🗑️ Hapus</button>}
               <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
             </div>
           </div>
@@ -1457,6 +1458,17 @@ export default function RheumUSU() {
     setShowLogbookModal(false);
     setNewLogbook({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"", fileName:"", fileData:"", fileType:"" });
   };
+  const deletePatient = async (patientId) => {
+    if (!window.confirm("Hapus data pasien ini? Tindakan ini tidak dapat dibatalkan.")) return;
+    if (supabase) {
+      const { error } = await supabase.from("patients").delete().eq("id", patientId);
+      if (error) { alert("Gagal menghapus: " + error.message); return; }
+    }
+    setPatients(prev => prev.filter(p => p.id !== patientId));
+    setShowPatientDetail(null);
+    addNotification({ title:"🗑️ Pasien Dihapus", body:"Data pasien berhasil dihapus dari database", type:"delete", icon:"🗑️" });
+  };
+
   const updatePatient = async (patientId, data) => {
     const uid = currentUser.id || currentUser.sub;
     const updateLog = {
@@ -2671,6 +2683,10 @@ export default function RheumUSU() {
                           style={{background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:8,color:"#f59e0b",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
                           ✏️ Edit
                         </button>
+                        <button onClick={e=>{e.stopPropagation();deletePatient(p.id);}}
+                          style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:8,color:"#ef4444",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
+                          🗑️ Hapus
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -3012,6 +3028,7 @@ export default function RheumUSU() {
         patient={showPatientDetail}
         onClose={()=>setShowPatientDetail(null)}
         onEdit={()=>{setEditingPatient(showPatientDetail);setShowPatientDetail(null);setShowPatientModal(true);}}
+        onDelete={()=>deletePatient(showPatientDetail.id)}
       />}
 
       {showMaterialDetail&&(
