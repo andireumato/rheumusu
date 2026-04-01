@@ -1088,6 +1088,9 @@ export default function RheumUSU() {
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
   const [newAnnounce, setNewAnnounce] = useState({ title:"", message:"", priority:"normal" });
   const [showCompletedResidents, setShowCompletedResidents] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [pushPermission, setPushPermission] = useState("default");
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analysisFilter, setAnalysisFilter] = useState({ diagnosis:"", gender:"", year:"", activity:"" }); // null = tambah baru, object = edit
   const [showPatientDetail, setShowPatientDetail] = useState(null);
@@ -1180,7 +1183,22 @@ export default function RheumUSU() {
           .select("*")
           .order("created_at", {ascending: false})
           .limit(10);
-        if (announceData) setAnnouncements(announceData);
+        if (announceData) {
+          setAnnouncements(announceData);
+          // Notifikasi pengumuman baru (yang belum pernah dibaca)
+          if (announceData.length > 0 && currentUser.role !== "supervisor") {
+            const newest = announceData[0];
+            const lastSeen = localStorage.getItem("rheumusu_last_announce");
+            if (!lastSeen || new Date(newest.created_at) > new Date(lastSeen)) {
+              addNotification({
+                title: `📢 ${newest.priority==="urgent"?"🔴 URGENT: ":""}${newest.title}`,
+                body: newest.message.substring(0, 100) + (newest.message.length > 100 ? "..." : ""),
+                type: "announcement", icon: newest.priority==="urgent"?"🔴":"📢"
+              });
+              localStorage.setItem("rheumusu_last_announce", newest.created_at);
+            }
+          }
+        }
         if (profilesData) {
           setResidents(profilesData.filter(p => p.role === "resident"));
         }
@@ -1256,6 +1274,13 @@ export default function RheumUSU() {
     loadAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.sub]);
+
+  // Cek status push permission saat pertama load
+  useEffect(() => {
+    if ("Notification" in window) {
+      setPushPermission(Notification.permission);
+    }
+  }, []);
 
   // ── Realtime: subscribe perubahan status logbook ─────────────────
   useEffect(() => {
@@ -1591,11 +1616,20 @@ export default function RheumUSU() {
     setShowPatientModal(false);
   };
   const approveLogbook = async (id) => {
+    const entry = logbookEntries.find(e => e.id === id);
     // Update state dulu agar UI langsung berubah
     setLogbookEntries(prev => prev.map(e => e.id===id ? {
       ...e, status:"approved",
       approvedAt: new Date().toISOString()
     } : e));
+    // Kirim notifikasi in-app
+    if (currentUser.role === "supervisor") {
+      addNotification({
+        title: "✅ Logbook Approved",
+        body: `${entry?.type ? ACTIVITY_TYPES.find(a=>a.id===entry.type)?.label : "Kegiatan"} - ${entry?.topic || entry?.patientName || ""}`,
+        type: "approve", icon: "✅"
+      });
+    }
     // Kemudian update ke Supabase
     if (supabase) {
       const { error } = await supabase.from("logbook").update({
@@ -1655,6 +1689,37 @@ export default function RheumUSU() {
     ));
   };
   // ── Export Pasien DB ke Excel ──────────────────────────────────────
+  // ── Push Notification & In-App Notification ─────────────────────
+  const requestPushPermission = async () => {
+    if (!("Notification" in window)) {
+      alert("Browser Anda tidak mendukung notifikasi push."); return;
+    }
+    const permission = await Notification.requestPermission();
+    setPushPermission(permission);
+    if (permission === "granted") {
+      new Notification("🔔 RheumUSU", {
+        body: "Notifikasi push berhasil diaktifkan!",
+        icon: "/favicon.ico"
+      });
+    }
+  };
+
+  const sendPushNotif = (title, body) => {
+    if (Notification.permission === "granted") {
+      new Notification(title, { body, icon: "/favicon.ico" });
+    }
+  };
+
+  const addNotification = (notif) => {
+    const n = { ...notif, id: Date.now(), read: false, time: new Date().toISOString() };
+    setNotifications(prev => [n, ...prev].slice(0, 50)); // max 50
+    sendPushNotif(notif.title, notif.body);
+  };
+
+  const markAllRead = () => setNotifications(prev => prev.map(n => ({...n, read: true})));
+  const clearNotif = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
+  const unreadCount = notifications.filter(n => !n.read).length;
+
   const addAnnouncement = async () => {
     if (!newAnnounce.title || !newAnnounce.message) {
       alert("Judul dan pesan wajib diisi!"); return;
@@ -2114,7 +2179,15 @@ export default function RheumUSU() {
             </div>
             <img src={LOGO_IRA} alt="IRA" style={{width:36,height:36,borderRadius:"50%",objectFit:"cover",border:"2px solid #334155",background:"white"}}/>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Bell icon */}
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowNotifPanel(v=>!v)}
+                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:10,color:"#94a3b8",padding:"7px 10px",cursor:"pointer",fontSize:18,position:"relative",display:"flex",alignItems:"center"}}>
+                🔔
+                {unreadCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#ef4444",borderRadius:"50%",width:18,height:18,fontSize:10,fontWeight:900,color:"white",display:"flex",alignItems:"center",justifyContent:"center"}}>{unreadCount>9?"9+":unreadCount}</span>}
+              </button>
+            </div>
             <div style={{textAlign:"right"}}><div style={{color:"#f1f5f9",fontWeight:600,fontSize:14}}>{currentUser.full_name || currentUser.name || currentUser.email}</div><div style={{color:"#64748b",fontSize:11}}>{currentUser.role==="supervisor"?"Supervisor / Sp.PD-KR":currentUser.nim?`NIM: ${currentUser.nim}`:currentUser.email}</div></div>
             <button onClick={logout} style={{...S.btn("#ef444422"),color:"#ef4444",border:"1px solid #ef444444",padding:"8px 14px"}}>Keluar</button>
           </div>
@@ -2657,6 +2730,55 @@ export default function RheumUSU() {
               </button>
             </div>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        </div>
+      )}
+
+      {/* ── Notification Panel ── */}
+      {showNotifPanel&&(
+        <div style={{position:"fixed",inset:0,zIndex:999}} onClick={()=>setShowNotifPanel(false)}>
+          <div style={{position:"absolute",top:68,right:16,width:360,maxHeight:"80vh",background:"#1e293b",borderRadius:16,border:"1px solid #334155",boxShadow:"0 20px 60px #000a",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div style={{padding:"14px 16px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontWeight:700,color:"#f1f5f9",fontSize:14}}>🔔 Notifikasi {unreadCount>0&&<span style={{background:"#ef4444",borderRadius:20,padding:"1px 8px",fontSize:11,marginLeft:6}}>{unreadCount}</span>}</div>
+              <div style={{display:"flex",gap:8}}>
+                {unreadCount>0&&<button onClick={markAllRead} style={{background:"none",border:"none",color:"#3b82f6",cursor:"pointer",fontSize:12}}>Tandai semua dibaca</button>}
+                {!pushPermission||pushPermission==="default"
+                  ?<button onClick={requestPushPermission} style={{background:"#3b82f622",border:"1px solid #3b82f644",borderRadius:6,color:"#3b82f6",padding:"3px 8px",cursor:"pointer",fontSize:11}}>Aktifkan Push</button>
+                  :pushPermission==="granted"
+                  ?<span style={{fontSize:11,color:"#10b981"}}>✓ Push aktif</span>
+                  :<span style={{fontSize:11,color:"#ef4444"}}>Push diblokir</span>}
+              </div>
+            </div>
+            {/* List */}
+            <div style={{overflowY:"auto",flex:1}}>
+              {notifications.length===0
+                ?<div style={{padding:40,textAlign:"center",color:"#475569",fontSize:13}}>
+                  <div style={{fontSize:36,marginBottom:8}}>🔔</div>
+                  Belum ada notifikasi
+                </div>
+                :notifications.map(n=>(
+                  <div key={n.id} onClick={()=>setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,read:true}:x))}
+                    style={{padding:"12px 16px",borderBottom:"1px solid #0f172a",background:n.read?"transparent":"#3b82f611",cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}>
+                    <div style={{fontSize:20,flexShrink:0}}>{n.icon||"🔔"}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:n.read?400:700,color:n.read?"#94a3b8":"#f1f5f9",fontSize:13,marginBottom:2}}>{n.title}</div>
+                      <div style={{color:"#64748b",fontSize:12,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.body}</div>
+                      <div style={{color:"#334155",fontSize:10,marginTop:3}}>
+                        {new Date(n.time).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})} · {new Date(n.time).toLocaleDateString("id-ID",{day:"numeric",month:"short"})}
+                      </div>
+                    </div>
+                    <button onClick={e=>{e.stopPropagation();clearNotif(n.id);}}
+                      style={{background:"none",border:"none",color:"#475569",cursor:"pointer",fontSize:14,padding:0,flexShrink:0}}>×</button>
+                  </div>
+                ))
+              }
+            </div>
+            {notifications.length>0&&(
+              <div style={{padding:"10px 16px",borderTop:"1px solid #334155",textAlign:"center"}}>
+                <button onClick={()=>setNotifications([])} style={{background:"none",border:"none",color:"#475569",cursor:"pointer",fontSize:12}}>Hapus semua notifikasi</button>
+              </div>
+            )}
           </div>
         </div>
       )}
