@@ -1081,6 +1081,23 @@ export default function RheumUSU() {
   const [dataLoading, setDataLoading] = useState(false);
   const [showLogbookModal, setShowLogbookModal] = useState(false);
   const [isSavingLogbook, setIsSavingLogbook] = useState(false);
+  const [showCBDModal, setShowCBDModal] = useState(false);
+  const [cbdForm, setCbdForm] = useState({
+    date: new Date().toISOString().split("T")[0],
+    patientInitials:"", diagnosis:"", presenter:"",
+    // ANAMNESIS
+    chiefComplaint:"", historyPresentIllness:"", pastMedHistory:"", familyHistory:"", socialHistory:"",
+    // PEMERIKSAAN
+    physicalExam:"", supportingExam:"",
+    // DIAGNOSIS & MANAJEMEN
+    workingDiagnosis:"", differentialDiagnosis:"", managementPlan:"", pharmacotherapy:"",
+    // DISKUSI
+    keyLearningPoints:"", clinicalReasoning:"", evidenceBased:"", pitfalls:"",
+    // FEEDBACK SUPERVISOR
+    feedbackStrengths:"", feedbackImprovements:"", overallAssessment:"",
+    score:"", supervisorNote:""
+  });
+  const [cbdStep, setCbdStep] = useState(0);
   const [showPatientModal, setShowPatientModal] = useState(false);
   const [editingPatient, setEditingPatient] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
@@ -1362,6 +1379,51 @@ export default function RheumUSU() {
   const myPatients = currentUser?.role==="supervisor" ? patients : patients.filter(p=>isMyEntry(p.residentId));
   const myAttendance = currentUser?.role==="supervisor" ? attendance : attendance.filter(a=>isMyEntry(a.residentId));
   const filteredPatients = myPatients.filter(p=>{ const q=patientSearch.toLowerCase(); return !q||[p.mrn,p.initials,p.diagnosis,p.ethnicity,p.address,p.education,p.occupation].some(v=>v?.toString().toLowerCase().includes(q)); });
+
+  const saveCBD = async () => {
+    if (isSavingLogbook) return;
+    setIsSavingLogbook(true);
+    const uid = currentUser.id || currentUser.sub;
+    const cbdNotes = JSON.stringify({
+      anamnesis: { chiefComplaint: cbdForm.chiefComplaint, history: cbdForm.historyPresentIllness, pastMed: cbdForm.pastMedHistory, family: cbdForm.familyHistory, social: cbdForm.socialHistory },
+      pemeriksaan: { physical: cbdForm.physicalExam, supporting: cbdForm.supportingExam },
+      diagnosis: { working: cbdForm.workingDiagnosis, differential: cbdForm.differentialDiagnosis },
+      manajemen: { plan: cbdForm.managementPlan, pharma: cbdForm.pharmacotherapy },
+      diskusi: { keyPoints: cbdForm.keyLearningPoints, reasoning: cbdForm.clinicalReasoning, evidence: cbdForm.evidenceBased, pitfalls: cbdForm.pitfalls },
+      feedback: { strengths: cbdForm.feedbackStrengths, improvements: cbdForm.feedbackImprovements, overall: cbdForm.overallAssessment, score: cbdForm.score, note: cbdForm.supervisorNote }
+    });
+    try {
+      if (supabase) {
+        const { data: saved, error } = await supabase.from("logbook").insert({
+          resident_id: uid,
+          activity_type: "cbd",
+          activity_date: cbdForm.date,
+          patient_name: cbdForm.patientInitials,
+          diagnosis: cbdForm.diagnosis,
+          topic: cbdForm.workingDiagnosis || cbdForm.diagnosis,
+          notes: cbdNotes,
+          status: "pending"
+        }).select().single();
+        if (!error && saved) {
+          setLogbookEntries(prev => [{
+            id: saved.id, residentId: saved.resident_id, date: saved.activity_date,
+            type: "cbd", patientName: saved.patient_name,
+            diagnosis: saved.diagnosis, topic: saved.topic,
+            notes: saved.notes, status: saved.status,
+            isCBDDigital: true
+          }, ...prev]);
+        }
+      }
+      setShowCBDModal(false);
+      setCbdStep(0);
+      setCbdForm({ date: new Date().toISOString().split("T")[0], patientInitials:"", diagnosis:"", presenter:"", chiefComplaint:"", historyPresentIllness:"", pastMedHistory:"", familyHistory:"", socialHistory:"", physicalExam:"", supportingExam:"", workingDiagnosis:"", differentialDiagnosis:"", managementPlan:"", pharmacotherapy:"", keyLearningPoints:"", clinicalReasoning:"", evidenceBased:"", pitfalls:"", feedbackStrengths:"", feedbackImprovements:"", overallAssessment:"", score:"", supervisorNote:"" });
+      alert("✅ CBD berhasil disimpan!");
+    } catch(err) {
+      alert("Gagal menyimpan CBD: " + err.message);
+    } finally {
+      setIsSavingLogbook(false);
+    }
+  };
 
   const addLogbook = async () => {
     if (isSavingLogbook) return; // Cegah double submit
@@ -2292,7 +2354,7 @@ export default function RheumUSU() {
         {activeTab==="logbook"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
               <h2 style={{color:"#f1f5f9",margin:0}}>Logbook Kegiatan</h2>
               <button onClick={async()=>{
                 if(!supabase) return;
@@ -2308,13 +2370,23 @@ export default function RheumUSU() {
                 🔄 Refresh
               </button>
             </div>
-              {currentUser.role==="resident"&&<button onClick={()=>setShowLogbookModal(true)} style={S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)")}>+ Tambah</button>}
+              {currentUser.role==="resident"&&<div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setShowCBDModal(true)}
+                  style={{...S.btn("linear-gradient(135deg,#8b5cf6,#06b6d4)"),fontSize:13,padding:"8px 14px",display:"flex",alignItems:"center",gap:6}}>
+                  💬 CBD Digital
+                </button>
+                <button onClick={()=>setShowLogbookModal(true)}
+                  style={{...S.btn("linear-gradient(135deg,#3b82f6,#8b5cf6)"),fontSize:13}}>
+                  + Tambah Logbook
+                </button>
+              </div>}
             </div>
             {myLogbook.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{const act=ACTIVITY_TYPES.find(a=>a.id===e.type);const res=findResident(e.residentId);return(
               <div key={e.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10}}>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{act?.icon}</span><span style={{fontWeight:700,color:act?.color}}>{act?.label}</span><span style={{color:"#64748b",fontSize:12}}>{e.date}</span>{currentUser.role==="supervisor"&&<span style={{color:"#94a3b8",fontSize:12}}>· {res?.full_name||res?.name||"Residen"}</span>}</div>
                   {e.patientName&&<div style={{color:"#94a3b8",fontSize:13}}>👥 {e.patientName} — {e.diagnosis}</div>}
+                  {e.type==="cbd"&&e.isCBDDigital&&<span style={{background:"#8b5cf622",border:"1px solid #8b5cf644",borderRadius:6,color:"#8b5cf6",fontSize:10,padding:"2px 8px",fontWeight:700}}>💬 CBD Digital</span>}
                   {e.topic&&<div style={{color:"#94a3b8",fontSize:13}}>📌 {e.topic}</div>}
                   {e.notes&&<div style={{color:"#64748b",fontSize:12,marginTop:3}}>{e.notes}</div>}
                   {e.fileName&&(
@@ -2577,6 +2649,166 @@ export default function RheumUSU() {
       </div>
 
       {/* Modals */}
+      {/* ── CBD DIGITAL MODAL ── */}
+      {showCBDModal&&(
+        <div style={{...S.modal,alignItems:"flex-start",paddingTop:20}} onClick={()=>setShowCBDModal(false)}>
+          <div style={{background:"#1e293b",borderRadius:20,width:"100%",maxWidth:680,maxHeight:"92vh",display:"flex",flexDirection:"column",border:"1px solid #334155",margin:"auto"}} onClick={e=>e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{padding:"16px 22px",borderBottom:"1px solid #334155"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <h3 style={{color:"#f1f5f9",margin:0,fontSize:16}}>💬 Case Based Discussion (CBD) Digital</h3>
+                <button onClick={()=>{setShowCBDModal(false);setCbdStep(0);}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:22}}>×</button>
+              </div>
+              {/* Step tabs */}
+              <div style={{display:"flex",gap:4,overflowX:"auto"}}>
+                {[["📋 Identitas","Identitas"],["🔍 Anamnesis","Anamnesis"],["🩺 Pemeriksaan","Pemeriksaan"],["🎯 Diagnosis","Diagnosis & Manajemen"],["💡 Diskusi","Poin Diskusi"],["⭐ Penilaian","Penilaian Supervisor"]].map(([icon,label],i)=>(
+                  <button key={i} type="button" onClick={()=>setCbdStep(i)}
+                    style={{padding:"5px 10px",borderRadius:7,border:`1.5px solid ${cbdStep===i?"#8b5cf6":i<cbdStep?"#10b981":"#334155"}`,background:cbdStep===i?"#8b5cf622":i<cbdStep?"#10b98122":"transparent",color:cbdStep===i?"#8b5cf6":i<cbdStep?"#10b981":"#64748b",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontWeight:cbdStep===i?700:400}}>
+                    {i<cbdStep?"✓ ":""}{icon}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{flex:1,overflowY:"auto",padding:"16px 22px"}}>
+              {/* Step 0: Identitas */}
+              {cbdStep===0&&(
+                <div>
+                  <div style={{color:"#8b5cf6",fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:10,paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Data Kasus</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <div><label style={S.label}>Tanggal CBD *</label>
+                      <input type="date" value={cbdForm.date} onChange={e=>setCbdForm(p=>({...p,date:e.target.value}))} style={S.input}/></div>
+                    <div><label style={S.label}>Inisial Pasien *</label>
+                      <input value={cbdForm.patientInitials} onChange={e=>setCbdForm(p=>({...p,patientInitials:e.target.value}))} placeholder="Ny. SR" style={S.input}/></div>
+                  </div>
+                  <div><label style={S.label}>Diagnosis Kasus *</label>
+                    <select value={cbdForm.diagnosis} onChange={e=>setCbdForm(p=>({...p,diagnosis:e.target.value}))} style={S.input}>
+                      <option value="">Pilih diagnosis...</option>
+                      {DIAGNOSES.map(d=><option key={d}>{d}</option>)}
+                    </select></div>
+                  <div><label style={S.label}>Nama Presenter (Residen)</label>
+                    <input value={cbdForm.presenter||currentUser.full_name||currentUser.name||""} onChange={e=>setCbdForm(p=>({...p,presenter:e.target.value}))} style={S.input}/></div>
+                </div>
+              )}
+
+              {/* Step 1: Anamnesis */}
+              {cbdStep===1&&(
+                <div>
+                  <div style={{color:"#8b5cf6",fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:10,paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Anamnesis</div>
+                  <div><label style={S.label}>Keluhan Utama *</label>
+                    <textarea value={cbdForm.chiefComplaint} onChange={e=>setCbdForm(p=>({...p,chiefComplaint:e.target.value}))} rows={2} placeholder="Keluhan utama pasien..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Riwayat Penyakit Sekarang</label>
+                    <textarea value={cbdForm.historyPresentIllness} onChange={e=>setCbdForm(p=>({...p,historyPresentIllness:e.target.value}))} rows={4} placeholder="Onset, durasi, perjalanan penyakit, gejala penyerta, faktor yang memperburuk/memperingan..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Riwayat Penyakit Dahulu</label>
+                    <textarea value={cbdForm.pastMedHistory} onChange={e=>setCbdForm(p=>({...p,pastMedHistory:e.target.value}))} rows={2} placeholder="Penyakit sebelumnya, operasi, alergi, obat rutin..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <div><label style={S.label}>Riwayat Keluarga</label>
+                      <textarea value={cbdForm.familyHistory} onChange={e=>setCbdForm(p=>({...p,familyHistory:e.target.value}))} rows={2} placeholder="Penyakit serupa dalam keluarga..." style={{...S.input,resize:"vertical"}}/></div>
+                    <div><label style={S.label}>Riwayat Sosial</label>
+                      <textarea value={cbdForm.socialHistory} onChange={e=>setCbdForm(p=>({...p,socialHistory:e.target.value}))} rows={2} placeholder="Pekerjaan, kebiasaan, lingkungan..." style={{...S.input,resize:"vertical"}}/></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Pemeriksaan */}
+              {cbdStep===2&&(
+                <div>
+                  <div style={{color:"#8b5cf6",fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:10,paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Pemeriksaan</div>
+                  <div><label style={S.label}>Pemeriksaan Fisik</label>
+                    <textarea value={cbdForm.physicalExam} onChange={e=>setCbdForm(p=>({...p,physicalExam:e.target.value}))} rows={5} placeholder="Tanda vital, status generalis, status lokalis (sendi yang terlibat, tanda inflamasi, deformitas)..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Pemeriksaan Penunjang</label>
+                    <textarea value={cbdForm.supportingExam} onChange={e=>setCbdForm(p=>({...p,supportingExam:e.target.value}))} rows={5} placeholder="Lab: Hb, Leukosit, LED, CRP, RF, Anti-CCP, ANA...
+Imaging: Rontgen, USG, MRI...
+Skor aktivitas: DAS28, SLEDAI..." style={{...S.input,resize:"vertical"}}/></div>
+                </div>
+              )}
+
+              {/* Step 3: Diagnosis & Manajemen */}
+              {cbdStep===3&&(
+                <div>
+                  <div style={{color:"#8b5cf6",fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:10,paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Diagnosis & Manajemen</div>
+                  <div><label style={S.label}>Diagnosis Kerja *</label>
+                    <textarea value={cbdForm.workingDiagnosis} onChange={e=>setCbdForm(p=>({...p,workingDiagnosis:e.target.value}))} rows={2} placeholder="Diagnosis utama + sekunder berdasarkan kriteria..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Diagnosis Banding</label>
+                    <textarea value={cbdForm.differentialDiagnosis} onChange={e=>setCbdForm(p=>({...p,differentialDiagnosis:e.target.value}))} rows={2} placeholder="DD yang dipertimbangkan beserta alasan..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Rencana Tatalaksana</label>
+                    <textarea value={cbdForm.managementPlan} onChange={e=>setCbdForm(p=>({...p,managementPlan:e.target.value}))} rows={3} placeholder="Non-farmakologi: edukasi, fisioterapi, diet...
+Rujukan: ke divisi lain..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Farmakoterapi</label>
+                    <textarea value={cbdForm.pharmacotherapy} onChange={e=>setCbdForm(p=>({...p,pharmacotherapy:e.target.value}))} rows={3} placeholder="Nama obat, dosis, rute, durasi...
+MTX 15mg/minggu, HCQ 400mg/hari..." style={{...S.input,resize:"vertical"}}/></div>
+                </div>
+              )}
+
+              {/* Step 4: Poin Diskusi */}
+              {cbdStep===4&&(
+                <div>
+                  <div style={{color:"#8b5cf6",fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:10,paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Poin Diskusi Ilmiah</div>
+                  <div><label style={S.label}>Key Learning Points *</label>
+                    <textarea value={cbdForm.keyLearningPoints} onChange={e=>setCbdForm(p=>({...p,keyLearningPoints:e.target.value}))} rows={3} placeholder="Poin pembelajaran utama dari kasus ini..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Clinical Reasoning</label>
+                    <textarea value={cbdForm.clinicalReasoning} onChange={e=>setCbdForm(p=>({...p,clinicalReasoning:e.target.value}))} rows={3} placeholder="Bagaimana proses berpikir klinis dalam kasus ini? Apa yang membuat diagnosis ini dan bukan yang lain?" style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Evidence Based Medicine</label>
+                    <textarea value={cbdForm.evidenceBased} onChange={e=>setCbdForm(p=>({...p,evidenceBased:e.target.value}))} rows={3} placeholder="Referensi guideline yang digunakan (ACR, EULAR, APLAR)...
+Jurnal pendukung..." style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Pitfalls & Tantangan</label>
+                    <textarea value={cbdForm.pitfalls} onChange={e=>setCbdForm(p=>({...p,pitfalls:e.target.value}))} rows={2} placeholder="Apa yang mudah terlewat dalam kasus seperti ini? Kesalahan umum?" style={{...S.input,resize:"vertical"}}/></div>
+                </div>
+              )}
+
+              {/* Step 5: Penilaian Supervisor */}
+              {cbdStep===5&&(
+                <div>
+                  <div style={{color:"#8b5cf6",fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:10,paddingBottom:5,borderBottom:"1px solid #1e3a5f"}}>Penilaian Supervisor</div>
+                  <div style={{background:"#0f172a",borderRadius:10,padding:14,marginBottom:12,fontSize:12,color:"#64748b"}}>
+                    💡 Bagian ini diisi oleh supervisor saat sesi CBD berlangsung atau setelah presentasi
+                  </div>
+                  <div><label style={S.label}>Kelebihan Presentasi</label>
+                    <textarea value={cbdForm.feedbackStrengths} onChange={e=>setCbdForm(p=>({...p,feedbackStrengths:e.target.value}))} rows={3} placeholder="Apa yang sudah baik dari presentasi residen?" style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Area yang Perlu Ditingkatkan</label>
+                    <textarea value={cbdForm.feedbackImprovements} onChange={e=>setCbdForm(p=>({...p,feedbackImprovements:e.target.value}))} rows={3} placeholder="Apa yang perlu diperbaiki/dipelajari lebih lanjut?" style={{...S.input,resize:"vertical"}}/></div>
+                  <div><label style={S.label}>Penilaian Keseluruhan</label>
+                    <select value={cbdForm.overallAssessment} onChange={e=>setCbdForm(p=>({...p,overallAssessment:e.target.value}))} style={S.input}>
+                      <option value="">Pilih...</option>
+                      <option value="Sangat Memuaskan">⭐⭐⭐⭐⭐ Sangat Memuaskan</option>
+                      <option value="Memuaskan">⭐⭐⭐⭐ Memuaskan</option>
+                      <option value="Cukup">⭐⭐⭐ Cukup</option>
+                      <option value="Perlu Perbaikan">⭐⭐ Perlu Perbaikan</option>
+                      <option value="Tidak Memuaskan">⭐ Tidak Memuaskan</option>
+                    </select></div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <div><label style={S.label}>Nilai (0–100)</label>
+                      <input type="number" min="0" max="100" value={cbdForm.score} onChange={e=>setCbdForm(p=>({...p,score:e.target.value}))} placeholder="85" style={S.input}/></div>
+                    <div><label style={S.label}>Catatan Supervisor</label>
+                      <input value={cbdForm.supervisorNote} onChange={e=>setCbdForm(p=>({...p,supervisorNote:e.target.value}))} placeholder="Catatan tambahan..." style={S.input}/></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{padding:"12px 22px",borderTop:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <button type="button" onClick={()=>setCbdStep(s=>Math.max(0,s-1))} disabled={cbdStep===0}
+                style={{padding:"8px 18px",borderRadius:10,border:"1px solid #334155",background:cbdStep===0?"transparent":"#334155",color:cbdStep===0?"#475569":"#f1f5f9",cursor:cbdStep===0?"default":"pointer",fontWeight:600}}>
+                ← Sebelumnya
+              </button>
+              <span style={{color:"#64748b",fontSize:12}}>{cbdStep+1} / 6</span>
+              {cbdStep<5
+                ?<button type="button" onClick={()=>setCbdStep(s=>s+1)}
+                  style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#8b5cf6,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700}}>
+                  Lanjut →
+                </button>
+                :<button type="button" onClick={saveCBD} disabled={isSavingLogbook}
+                  style={{padding:"8px 18px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#06b6d4)",color:"white",cursor:"pointer",fontWeight:700,opacity:isSavingLogbook?0.7:1}}>
+                  {isSavingLogbook?"Menyimpan...":"💾 Simpan CBD"}
+                </button>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showLogbookModal&&(
         <div style={S.modal} onClick={()=>setShowLogbookModal(false)}>
           <div style={S.modalBox} onClick={e=>e.stopPropagation()}>
