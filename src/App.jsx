@@ -1461,14 +1461,61 @@ export default function RheumUSU() {
     setNewLogbook({ type:"outpatient", date:new Date().toISOString().split("T")[0], patientName:"", diagnosis:"", topic:"", notes:"", fileName:"", fileData:"", fileType:"" });
   };
   const deletePatient = async (patientId) => {
-    if (!window.confirm("Hapus data pasien ini? Tindakan ini tidak dapat dibatalkan.")) return;
+    const patient = patients.find(p => p.id === patientId);
+    const deletedBy = currentUser.full_name || currentUser.name || currentUser.email;
+    const deletedAt = new Date();
+    const deletedAtStr = deletedAt.toLocaleString("id-ID", {
+      weekday:"long", day:"numeric", month:"long", year:"numeric",
+      hour:"2-digit", minute:"2-digit"
+    });
+
+    if (!window.confirm(
+      `Hapus data pasien ini?\n\n` +
+      `Pasien : ${patient?.initials || "-"}\n` +
+      `Diagnosis : ${patient?.diagnosis || "-"}\n` +
+      `No. RM : ${patient?.mrn || "-"}\n\n` +
+      `⚠️ Tindakan ini TIDAK DAPAT dibatalkan!`
+    )) return;
+
     if (supabase) {
+      // Simpan ke tabel audit_log sebelum hapus
+      await supabase.from("audit_log").insert({
+        action: "DELETE_PATIENT",
+        table_name: "patients",
+        record_id: String(patientId),
+        record_summary: `${patient?.initials||"-"} | ${patient?.diagnosis||"-"} | No.RM: ${patient?.mrn||"-"}`,
+        performed_by: deletedBy,
+        performed_by_id: currentUser.id || currentUser.sub,
+        performed_at: deletedAt.toISOString(),
+        details: JSON.stringify({
+          mrn: patient?.mrn,
+          initials: patient?.initials,
+          diagnosis: patient?.diagnosis,
+          age: patient?.age,
+          gender: patient?.gender,
+          residentId: patient?.residentId
+        })
+      }).catch(e => console.warn("Audit log error:", e.message));
+
       const { error } = await supabase.from("patients").delete().eq("id", patientId);
       if (error) { alert("Gagal menghapus: " + error.message); return; }
     }
+
     setPatients(prev => prev.filter(p => p.id !== patientId));
     setShowPatientDetail(null);
-    addNotification({ title:"🗑️ Pasien Dihapus", body:"Data pasien berhasil dihapus dari database", type:"delete", icon:"🗑️" });
+
+    // Notifikasi in-app dengan detail lengkap
+    addNotification({
+      title: "🗑️ Pasien Dihapus",
+      body: `${patient?.initials||"-"} (${patient?.diagnosis||"-"}) dihapus oleh ${deletedBy} · ${deletedAtStr}`,
+      type: "delete",
+      icon: "🗑️"
+    });
+
+    // Push notification ke supervisor jika yang menghapus adalah residen
+    if (currentUser.role === "resident") {
+      console.log(`[AUDIT] Pasien dihapus: ${patient?.initials} | oleh: ${deletedBy} | ${deletedAtStr}`);
+    }
   };
 
   const updatePatient = async (patientId, data) => {
